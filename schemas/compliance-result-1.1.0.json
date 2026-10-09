@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "ComplianceCaseResult": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "diagnostics": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "interfaces": {
+          "items": {
+            "$ref": "#/$defs/ComplianceInterface"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "outcome": {
+          "$ref": "#/$defs/ComplianceOutcome"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "case_id",
+        "required",
+        "interfaces",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "ComplianceCheck": {
+      "enum": [
+        "basic_operations",
+        "linked_scenarios",
+        "a2a_agent_message"
+      ],
+      "type": "string"
+    },
+    "ComplianceInterface": {
+      "enum": [
+        "a2a",
+        "mcp"
+      ],
+      "type": "string"
+    },
+    "ComplianceOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "skip"
+      ],
+      "type": "string"
+    },
+    "ComplianceScenarioResult": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostics": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "handoff_path": {
+          "items": {
+            "$ref": "#/$defs/ComplianceInterface"
+          },
+          "type": "array"
+        },
+        "interfaces": {
+          "items": {
+            "$ref": "#/$defs/ComplianceInterface"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "outcome": {
+          "$ref": "#/$defs/ComplianceOutcome"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "scenario_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scenario_id",
+        "required",
+        "interfaces",
+        "handoff_path",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "ComplianceSuite": {
+      "enum": [
+        "basic",
+        "full"
+      ],
+      "type": "string"
+    },
+    "ImplementationIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/compliance-result-1.1.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/ComplianceCaseResult"
+      },
+      "type": "array"
+    },
+    "compliant": {
+      "type": "boolean"
+    },
+    "enabled_checks": {
+      "items": {
+        "$ref": "#/$defs/ComplianceCheck"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "implementation": {
+      "$ref": "#/$defs/ImplementationIdentity"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/ComplianceScenarioResult"
+      },
+      "type": "array"
+    },
+    "selected_suite": {
+      "$ref": "#/$defs/ComplianceSuite"
+    },
+    "suite_version": {
+      "type": "string"
+    },
+    "tested_interfaces": {
+      "items": {
+        "$ref": "#/$defs/ComplianceInterface"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "suite_version",
+    "selected_suite",
+    "enabled_checks",
+    "implementation",
+    "tested_interfaces",
+    "cases",
+    "scenarios",
+    "compliant"
+  ],
+  "title": "ComplianceResult",
+  "type": "object"
+}

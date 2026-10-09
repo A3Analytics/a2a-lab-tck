@@ -1,0 +1,51 @@
+# Consumer badge (replace OWNER/REPOSITORY and main with the default branch):
+# [![A2A-LAB Compliance](https://github.com/OWNER/REPOSITORY/actions/workflows/a2a-lab-compliance.yml/badge.svg?branch=main)](https://github.com/OWNER/REPOSITORY/actions/workflows/a2a-lab-compliance.yml?query=branch%3Amain)
+#
+# Replace the 40-hex placeholder below with the authorized a2a-lab-tck release
+# commit. Keep the full commit SHA: a tag or branch is mutable provenance.
+#
+# The badge is not certification. The tested consumer commit passed only for
+# the recorded profile, suite and check selection at the immutable TCK
+# revision. It is not upstream A2A protocol TCK status.
+
+name: A2A-LAB Compliance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out consumer repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Start caller-owned deterministic endpoints
+        run: ./scripts/start-compliance-fixture.sh
+
+      - name: Run official A2A-LAB TCK
+        id: compliance
+        uses: A3Analytics/a2a-lab-tck@0123456789abcdef0123456789abcdef01234567
+        with:
+          a2a-url: http://127.0.0.1:3000
+          mcp-url: http://127.0.0.1:3001/mcp
+          fixtures: .a2a-lab/compliance-fixtures.json
+          profile: "1.1.0"
+          suite: full
+          llm-check: "true"
+          report-path: target/a2a-lab-compliance.json
+          timeout-milliseconds: "30000"
+
+      - name: Upload compliance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a2a-lab-compliance-report
+          path: target/a2a-lab-compliance.json
+          if-no-files-found: warn

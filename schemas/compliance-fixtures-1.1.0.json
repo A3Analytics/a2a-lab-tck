@@ -1,0 +1,323 @@
+{
+  "$defs": {
+    "FixtureCapability": {
+      "oneOf": [
+        {
+          "properties": {
+            "availability": {
+              "const": "required",
+              "type": "string"
+            },
+            "fixtures": {
+              "$ref": "#/$defs/LogFixtures"
+            }
+          },
+          "required": [
+            "availability",
+            "fixtures"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "availability": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "availability"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FixtureCapability2": {
+      "oneOf": [
+        {
+          "properties": {
+            "availability": {
+              "const": "required",
+              "type": "string"
+            },
+            "fixtures": {
+              "$ref": "#/$defs/MetricFixtures"
+            }
+          },
+          "required": [
+            "availability",
+            "fixtures"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "availability": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "availability"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FixtureCapability3": {
+      "oneOf": [
+        {
+          "properties": {
+            "availability": {
+              "const": "required",
+              "type": "string"
+            },
+            "fixtures": {
+              "$ref": "#/$defs/TaskFixtures"
+            }
+          },
+          "required": [
+            "availability",
+            "fixtures"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "availability": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "availability"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FixtureCapability4": {
+      "oneOf": [
+        {
+          "properties": {
+            "availability": {
+              "const": "required",
+              "type": "string"
+            },
+            "fixtures": {
+              "$ref": "#/$defs/ImageFixtures"
+            }
+          },
+          "required": [
+            "availability",
+            "fixtures"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "availability": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "availability"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ImageFixtures": {
+      "additionalProperties": false,
+      "properties": {
+        "alternate_image_id": {
+          "$ref": "#/$defs/ImageId"
+        },
+        "alternate_source_id": {
+          "$ref": "#/$defs/ImageSourceId"
+        },
+        "image_id": {
+          "$ref": "#/$defs/ImageId"
+        },
+        "missing_image_id": {
+          "$ref": "#/$defs/ImageId"
+        },
+        "missing_source_id": {
+          "$ref": "#/$defs/ImageSourceId"
+        },
+        "source_id": {
+          "$ref": "#/$defs/ImageSourceId"
+        }
+      },
+      "required": [
+        "source_id",
+        "alternate_source_id",
+        "image_id",
+        "alternate_image_id",
+        "missing_source_id",
+        "missing_image_id"
+      ],
+      "type": "object"
+    },
+    "ImageId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ImageSourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "JsonObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "LogFixtures": {
+      "additionalProperties": false,
+      "properties": {
+        "alternate_source_id": {
+          "$ref": "#/$defs/SourceId"
+        },
+        "missing_source_id": {
+          "$ref": "#/$defs/SourceId"
+        },
+        "source_id": {
+          "$ref": "#/$defs/SourceId"
+        }
+      },
+      "required": [
+        "source_id",
+        "alternate_source_id",
+        "missing_source_id"
+      ],
+      "type": "object"
+    },
+    "MetricFixtures": {
+      "additionalProperties": false,
+      "properties": {
+        "alternate_metric_id": {
+          "$ref": "#/$defs/MetricId"
+        },
+        "metric_id": {
+          "$ref": "#/$defs/MetricId"
+        },
+        "missing_metric_id": {
+          "$ref": "#/$defs/MetricId"
+        }
+      },
+      "required": [
+        "metric_id",
+        "alternate_metric_id",
+        "missing_metric_id"
+      ],
+      "type": "object"
+    },
+    "MetricId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "RunId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "SourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "TaskFixtures": {
+      "additionalProperties": false,
+      "properties": {
+        "alternate_task_id": {
+          "$ref": "#/$defs/TaskId"
+        },
+        "input": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "missing_run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "missing_task_id": {
+          "$ref": "#/$defs/TaskId"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "task_id": {
+          "$ref": "#/$defs/TaskId"
+        }
+      },
+      "required": [
+        "task_id",
+        "alternate_task_id",
+        "run_id",
+        "missing_task_id",
+        "missing_run_id",
+        "input"
+      ],
+      "type": "object"
+    },
+    "TaskId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "TimeRange": {
+      "description": "A half-open UTC interval `[start, end)`.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "start": {
+          "$ref": "#/$defs/UtcTimestamp"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/compliance-fixtures-1.1.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "images": {
+      "$ref": "#/$defs/FixtureCapability4"
+    },
+    "logs": {
+      "$ref": "#/$defs/FixtureCapability"
+    },
+    "metrics": {
+      "$ref": "#/$defs/FixtureCapability2"
+    },
+    "range": {
+      "$ref": "#/$defs/TimeRange"
+    },
+    "suite_version": {
+      "type": "string"
+    },
+    "tasks": {
+      "$ref": "#/$defs/FixtureCapability3"
+    }
+  },
+  "required": [
+    "suite_version",
+    "range",
+    "logs",
+    "metrics",
+    "tasks",
+    "images"
+  ],
+  "title": "ComplianceFixtures",
+  "type": "object"
+}

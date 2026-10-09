@@ -1,4 +1,4 @@
-project_name: "New repo"
+project_name: "A2A-LAB TCK"
 default_status: "To Do"
 statuses: ["To Do", "In Progress", "Done"]
 labels: []

@@ -1,0 +1,32 @@
+A2A-LAB TCK contract provenance
+
+Source repository: https://github.com/A3Analytics/a2a-lab-dev-kit-rs
+Source release: v0.1.0
+Source commit: 9d5327868d96b3e800fd89f6debf434bcc12709d
+Original author: Dylan Gustaveson <dylan@a3analytics.ai>
+
+Extracted source paths:
+- src/compliance.rs
+- tests/compliance_contract.rs
+- backlog/docs/reference/compliance/doc-23 - A2A-LAB-compliance-profile.md
+- action.yml
+- .github/actions/a2a-lab-compliance/run.sh
+- tests/github_action.rs
+
+The contract was extracted into the standalone A3 Analytics A2A-LAB TCK
+without rewriting the target repository's template commit 7cbfe5d.
+
+Standalone release contract:
+- A2A-LAB profile: 1.1.0
+- Inherited Action interface: devkit v0.1.0
+- Canonical Action repository: A3Analytics/a2a-lab-tck
+- First release provenance: the published Action must be selected by the full
+  40-character standalone repository commit that contains these assets
+
+This repository is not the upstream A2A protocol TCK, and its results do not
+represent upstream protocol TCK status.
+
+Release preparation does not authorize a push, tag, or GitHub release.
+Publication requires an explicit external authorization checkpoint, after
+which the consumer example placeholder must be replaced with the released
+standalone commit.
