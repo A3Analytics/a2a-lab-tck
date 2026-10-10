@@ -56,7 +56,7 @@ Rules:
 
 ## Task policy
 
-All task operations go through the Backlog.md CLI — **never hand-edit files** in `backlog/tasks/`. Direct edits break metadata, Git tracking, and relationships. Use `--plain` when reading for clean output.
+All task operations go through the Backlog.md CLI — **never hand-edit files** in `backlog/tasks/`. Direct edits break metadata and relationships. `backlog/tasks/`, `backlog/completed/`, `backlog/archive/`, `backlog/drafts/`, and `backlog/milestones/` are gitignored. Use `--plain` when reading for clean output.
 
 Statuses (only these): `To Do`, `In Progress`, `Done`.
 
@@ -76,7 +76,7 @@ For multi-line values use ANSI-C quoting: `--notes $'Line 1\nLine 2'`.
 
 - Atomic (one PR), independent, and testable — acceptance criteria are observable outcomes, not implementation steps.
 - Never reference a higher-numbered task.
-- Description = the *why/what*; Implementation Plan (added only after starting) = the *how*.
+- Description = the _why/what_; Implementation Plan (added only after starting) = the _how_.
 
 ### Definition of Done
 
