@@ -6,7 +6,7 @@ use a2a_lab_tck::{
     ComplianceFixtures, ComplianceInterface, ComplianceOutcome, ComplianceResult,
     ComplianceScenarioCapability, ComplianceScenarioResult, ComplianceSuite, FixtureCapability,
     ImageFixtures, ImplementationIdentity, LogFixtures, MetricFixtures, TaskFixtures,
-    compliance_profile, compliance_result_schema, compliance_suite,
+    VideoFixtures, compliance_profile, compliance_result_schema, compliance_suite,
 };
 use schemars::schema_for;
 use serde_json::json;
@@ -59,6 +59,25 @@ const CASE_IDS: &[&str] = &[
     "images.current.success",
     "images.current.missing-source",
     "images.current.unavailable",
+    "videos.sources.success",
+    "videos.sources.pagination",
+    "videos.sources.invalid-limit",
+    "videos.sources.unavailable",
+    "videos.frame.success",
+    "videos.frame.nearest",
+    "videos.frame.empty-coverage",
+    "videos.frame.outside-coverage",
+    "videos.frame.gap",
+    "videos.frame.unavailable",
+    "videos.clip.success",
+    "videos.clip.half-open-range",
+    "videos.clip.reversed-range",
+    "videos.clip.over-limit",
+    "videos.clip.empty-coverage",
+    "videos.clip.outside-coverage",
+    "videos.clip.gap",
+    "videos.clip.unavailable-endpoint",
+    "videos.clip.unavailable",
 ];
 
 const SCENARIO_IDS: &[&str] = &[
@@ -78,6 +97,10 @@ const SCENARIO_IDS: &[&str] = &[
     "images.link.mcp-mcp",
     "images.link.a2a-mcp",
     "images.link.mcp-a2a",
+    "videos.link.a2a-a2a",
+    "videos.link.mcp-mcp",
+    "videos.link.a2a-mcp",
+    "videos.link.mcp-a2a",
     "agent-message.a2a",
 ];
 
@@ -122,6 +145,33 @@ fn fixtures() -> ComplianceFixtures {
             missing_source_id: a2a_lab_dev_kit::ImageSourceId::new("images.sources.missing")
                 .unwrap(),
             missing_image_id: a2a_lab_dev_kit::ImageId::new("images.missing").unwrap(),
+        }),
+        videos: FixtureCapability::Required(VideoFixtures {
+            source_id: a2a_lab_dev_kit::VideoSourceId::new("videos.sources.primary").unwrap(),
+            alternate_source_id: a2a_lab_dev_kit::VideoSourceId::new("videos.sources.secondary")
+                .unwrap(),
+            missing_source_id: a2a_lab_dev_kit::VideoSourceId::new("videos.sources.missing")
+                .unwrap(),
+            empty_source_id: a2a_lab_dev_kit::VideoSourceId::new("videos.sources.empty").unwrap(),
+            frame_at: UtcTimestamp::parse("2026-01-01T00:00:00Z").unwrap(),
+            nearest_at: UtcTimestamp::parse("2026-01-01T00:00:00.500000Z").unwrap(),
+            outside_at: UtcTimestamp::parse("2026-01-02T00:00:00Z").unwrap(),
+            gap_at: UtcTimestamp::parse("2026-01-01T12:00:00Z").unwrap(),
+            clip_range: TimeRange::new(
+                UtcTimestamp::parse("2026-01-01T00:00:00Z").unwrap(),
+                UtcTimestamp::parse("2026-01-01T00:00:01Z").unwrap(),
+            )
+            .unwrap(),
+            outside_range: TimeRange::new(
+                UtcTimestamp::parse("2026-01-02T00:00:00Z").unwrap(),
+                UtcTimestamp::parse("2026-01-02T00:00:01Z").unwrap(),
+            )
+            .unwrap(),
+            gap_range: TimeRange::new(
+                UtcTimestamp::parse("2026-01-01T12:00:00Z").unwrap(),
+                UtcTimestamp::parse("2026-01-01T12:00:01Z").unwrap(),
+            )
+            .unwrap(),
         }),
     }
 }
@@ -177,7 +227,7 @@ fn result(suite: ComplianceSuite, agent_message: bool) -> ComplianceResult {
 
 #[test]
 fn published_profile_identifiers_and_composition_are_stable() {
-    assert_eq!(COMPLIANCE_PROFILE_VERSION, "1.1.0");
+    assert_eq!(COMPLIANCE_PROFILE_VERSION, "1.2.0");
     let basic = compliance_suite(ComplianceSuite::Basic);
     let full = compliance_suite(ComplianceSuite::Full);
     assert_eq!(
@@ -193,7 +243,7 @@ fn published_profile_identifiers_and_composition_are_stable() {
             .collect::<Vec<_>>(),
         SCENARIO_IDS
     );
-    assert_eq!(full.scenarios.len(), 16 + 1);
+    assert_eq!(full.scenarios.len(), 20 + 1);
 }
 
 #[test]
@@ -285,16 +335,16 @@ fn malformed_reports_return_field_level_diagnostics() {
 #[test]
 fn checked_in_schemas_match_generated_public_types() {
     let fixture_checked_in: serde_json::Value =
-        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.1.0.json")).unwrap();
+        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.2.0.json")).unwrap();
     let mut fixtures = schema_for!(ComplianceFixtures);
     fixtures.insert(
         "$id".to_owned(),
-        "https://a2a-lab.dev/schemas/compliance-fixtures-1.1.0.json".into(),
+        "https://a2a-lab.dev/schemas/compliance-fixtures-1.2.0.json".into(),
     );
     assert_eq!(fixture_checked_in, serde_json::to_value(fixtures).unwrap());
 
     let result_checked_in: serde_json::Value =
-        serde_json::from_str(include_str!("../schemas/compliance-result-1.1.0.json")).unwrap();
+        serde_json::from_str(include_str!("../schemas/compliance-result-1.2.0.json")).unwrap();
     let generated = serde_json::to_value(compliance_result_schema()).unwrap();
     assert_eq!(generated["$id"], COMPLIANCE_RESULT_SCHEMA_ID);
     assert_eq!(result_checked_in, generated);

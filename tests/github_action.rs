@@ -27,7 +27,7 @@ fn action_preserves_identity_interface_and_defaults() {
         "implementation-version:",
         "default: full",
         r#"default: "true""#,
-        r#"default: "1.1.0""#,
+        r#"default: "1.2.0""#,
     ] {
         assert!(
             ACTION.contains(value),
@@ -72,7 +72,7 @@ fn action_runner_forwards_the_published_cli_contract() {
 fn action_rejects_invalid_configuration_before_running_suite() {
     for (name, value, diagnostic) in [
         ("INPUT_A2A_URL", "not-a-url", "absolute HTTP(S) URL"),
-        ("INPUT_PROFILE", "1.0.0", "profile must be 1.1.0"),
+        ("INPUT_PROFILE", "1.0.0", "profile must be 1.2.0"),
         ("INPUT_SUITE", "extended", "suite must be basic or full"),
         ("INPUT_LLM_CHECK", "yes", "llm-check must be true or false"),
     ] {
@@ -236,7 +236,7 @@ fn assert_report_and_outputs(
 ) {
     let report_json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(report).unwrap()).unwrap();
-    assert_eq!(report_json["suite_version"], "1.1.0");
+    assert_eq!(report_json["suite_version"], "1.2.0");
     assert_eq!(report_json["selected_suite"], suite);
     assert_eq!(
         report_json["enabled_checks"]
@@ -248,7 +248,7 @@ fn assert_report_and_outputs(
     );
     assert_eq!(report_json["compliant"], compliant);
     let outputs = std::fs::read_to_string(output).unwrap();
-    assert!(outputs.contains("profile=1.1.0"));
+    assert!(outputs.contains("profile=1.2.0"));
     assert!(outputs.contains(&format!("suite={suite}")));
     assert!(outputs.contains(&format!("llm-check={llm_check}")));
     assert!(outputs.contains(&format!("compliant={compliant}")));
@@ -284,7 +284,7 @@ fn action_command(fixtures: &Path, report: &Path, output: &Path) -> Command {
         .env("INPUT_A2A_URL", "http://127.0.0.1:3000")
         .env("INPUT_MCP_URL", "http://127.0.0.1:3001/mcp")
         .env("INPUT_FIXTURES", fixtures)
-        .env("INPUT_PROFILE", "1.1.0")
+        .env("INPUT_PROFILE", "1.2.0")
         .env("INPUT_SUITE", "full")
         .env("INPUT_LLM_CHECK", "true")
         .env("INPUT_REPORT_PATH", report)
@@ -324,7 +324,7 @@ if sys.argv[3] == "full":
         enabled_checks.append("a2a_agent_message")
 with open(sys.argv[2], "w", encoding="utf-8") as report:
     json.dump({
-        "suite_version": "1.1.0",
+        "suite_version": "1.2.0",
         "selected_suite": sys.argv[3],
         "enabled_checks": enabled_checks,
         "compliant": compliant,

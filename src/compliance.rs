@@ -4,17 +4,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use a2a_lab_dev_kit::{
-    ImageId, ImageSourceId, JsonObject, MetricId, RunId, SourceId, TaskId, TimeRange,
+    ImageId, ImageSourceId, JsonObject, MetricId, RunId, SourceId, TaskId, TimeRange, UtcTimestamp,
+    VideoSourceId,
 };
 use schemars::{JsonSchema, Schema, schema_for};
 use serde::{Deserialize, Serialize};
 
 /// Current reusable A2A-LAB compliance profile.
-pub const COMPLIANCE_PROFILE_VERSION: &str = "1.1.0";
+pub const COMPLIANCE_PROFILE_VERSION: &str = "1.2.0";
 
 /// Stable identifier of the JSON result schema.
 pub const COMPLIANCE_RESULT_SCHEMA_ID: &str =
-    "https://a2a-lab.dev/schemas/compliance-result-1.1.0.json";
+    "https://a2a-lab.dev/schemas/compliance-result-1.2.0.json";
 
 #[derive(
     Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
@@ -62,6 +63,9 @@ pub enum ComplianceOperation {
     SearchImages,
     GetImage,
     GetCurrentImage,
+    ListVideoSources,
+    GetVideoFrameAt,
+    GetVideoClip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -90,6 +94,7 @@ pub enum ComplianceScenarioCapability {
     Metrics,
     Tasks,
     Images,
+    Videos,
     A2aAgentMessage,
 }
 
@@ -171,6 +176,15 @@ const RUN_FIELDS: &[&str] = &[
     "error_identifier",
 ];
 const IMAGE_FIELDS: &[&str] = &["descriptor", "data"];
+const VIDEO_FRAME_FIELDS: &[&str] = &["requested_at", "actual_captured_at", "delta_us", "image"];
+const VIDEO_CLIP_FIELDS: &[&str] = &[
+    "id",
+    "source_id",
+    "requested_range",
+    "effective_range",
+    "media_type",
+    "path",
+];
 
 const fn operation(
     operation: ComplianceOperation,
@@ -197,6 +211,9 @@ const OPERATIONS: &[OperationContract] = &[
     operation(ComplianceOperation::SearchImages, PAGE_FIELDS),
     operation(ComplianceOperation::GetImage, IMAGE_FIELDS),
     operation(ComplianceOperation::GetCurrentImage, IMAGE_FIELDS),
+    operation(ComplianceOperation::ListVideoSources, PAGE_FIELDS),
+    operation(ComplianceOperation::GetVideoFrameAt, VIDEO_FRAME_FIELDS),
+    operation(ComplianceOperation::GetVideoClip, VIDEO_CLIP_FIELDS),
 ];
 
 const INTENTIONAL_ENVELOPE_DIFFERENCES: &[&str] = &[
@@ -264,6 +281,25 @@ const CASES: &[ComplianceCase] = cases![
     ("images.current.success", GetCurrentImage, Success),
     ("images.current.missing-source", GetCurrentImage, NotFound),
     ("images.current.unavailable", GetCurrentImage, Unavailable),
+    ("videos.sources.success", ListVideoSources, Success),
+    ("videos.sources.pagination", ListVideoSources, Boundary),
+    ("videos.sources.invalid-limit", ListVideoSources, Invalid),
+    ("videos.sources.unavailable", ListVideoSources, Unavailable),
+    ("videos.frame.success", GetVideoFrameAt, Success),
+    ("videos.frame.nearest", GetVideoFrameAt, Boundary),
+    ("videos.frame.empty-coverage", GetVideoFrameAt, NotFound),
+    ("videos.frame.outside-coverage", GetVideoFrameAt, NotFound),
+    ("videos.frame.gap", GetVideoFrameAt, NotFound),
+    ("videos.frame.unavailable", GetVideoFrameAt, Unavailable),
+    ("videos.clip.success", GetVideoClip, Success),
+    ("videos.clip.half-open-range", GetVideoClip, Boundary),
+    ("videos.clip.reversed-range", GetVideoClip, Invalid),
+    ("videos.clip.over-limit", GetVideoClip, Invalid),
+    ("videos.clip.empty-coverage", GetVideoClip, NotFound),
+    ("videos.clip.outside-coverage", GetVideoClip, NotFound),
+    ("videos.clip.gap", GetVideoClip, NotFound),
+    ("videos.clip.unavailable-endpoint", GetVideoClip, NotFound),
+    ("videos.clip.unavailable", GetVideoClip, Unavailable),
 ];
 
 const LINK_ASSERTIONS: &[ComplianceScenarioAssertion] = &[
@@ -288,6 +324,7 @@ const IMAGE_STEPS: &[&str] = &[
     "get_image",
     "get_current_image",
 ];
+const VIDEO_STEPS: &[&str] = &["list_video_sources", "get_video_frame_at", "get_video_clip"];
 const AGENT_STEPS: &[&str] = &["a2a_agent_message"];
 
 macro_rules! scenario {
@@ -433,6 +470,38 @@ const FULL_SCENARIOS: &[ComplianceScenario] = &[
         LINK_ASSERTIONS
     ),
     scenario!(
+        "videos.link.a2a-a2a",
+        Videos,
+        A2a,
+        A2a,
+        VIDEO_STEPS,
+        LINK_ASSERTIONS
+    ),
+    scenario!(
+        "videos.link.mcp-mcp",
+        Videos,
+        Mcp,
+        Mcp,
+        VIDEO_STEPS,
+        LINK_ASSERTIONS
+    ),
+    scenario!(
+        "videos.link.a2a-mcp",
+        Videos,
+        A2a,
+        Mcp,
+        VIDEO_STEPS,
+        LINK_ASSERTIONS
+    ),
+    scenario!(
+        "videos.link.mcp-a2a",
+        Videos,
+        Mcp,
+        A2a,
+        VIDEO_STEPS,
+        LINK_ASSERTIONS
+    ),
+    scenario!(
         "agent-message.a2a",
         A2aAgentMessage,
         A2a,
@@ -499,6 +568,22 @@ pub struct ImageFixtures {
     pub missing_image_id: ImageId,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VideoFixtures {
+    pub source_id: VideoSourceId,
+    pub alternate_source_id: VideoSourceId,
+    pub missing_source_id: VideoSourceId,
+    pub empty_source_id: VideoSourceId,
+    pub frame_at: UtcTimestamp,
+    pub nearest_at: UtcTimestamp,
+    pub outside_at: UtcTimestamp,
+    pub gap_at: UtcTimestamp,
+    pub clip_range: TimeRange,
+    pub outside_range: TimeRange,
+    pub gap_range: TimeRange,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ComplianceFixtures {
@@ -508,6 +593,7 @@ pub struct ComplianceFixtures {
     pub metrics: FixtureCapability<MetricFixtures>,
     pub tasks: FixtureCapability<TaskFixtures>,
     pub images: FixtureCapability<ImageFixtures>,
+    pub videos: FixtureCapability<VideoFixtures>,
 }
 
 impl ComplianceFixtures {
@@ -574,6 +660,27 @@ impl ComplianceFixtures {
                 ],
                 &mut errors,
             );
+        }
+        if let FixtureCapability::Required(value) = &self.videos {
+            unique(
+                "videos.sources",
+                [
+                    &value.source_id,
+                    &value.alternate_source_id,
+                    &value.missing_source_id,
+                    &value.empty_source_id,
+                ],
+                &mut errors,
+            );
+            for (field, range) in [
+                ("videos.clip_range", value.clip_range),
+                ("videos.outside_range", value.outside_range),
+                ("videos.gap_range", value.gap_range),
+            ] {
+                if let Err(error) = range.check() {
+                    errors.push(field_error(field, error));
+                }
+            }
         }
         finish(errors)
     }

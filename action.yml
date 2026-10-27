@@ -19,7 +19,7 @@ inputs:
   profile:
     description: A2A-LAB compliance profile version
     required: false
-    default: "1.1.0"
+    default: "1.2.0"
   suite:
     description: Compliance scope to run (basic or full)
     required: false

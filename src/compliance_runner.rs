@@ -24,7 +24,12 @@ use a2a_lab_dev_kit::{
 };
 use a2a_lab_dev_kit::{GetTaskStatusRequest, ListTasksRequest, StartTaskRequest};
 use a2a_lab_dev_kit::{
-    ImageId, ImageSourceId, JsonObject, MetricId, RunId, SourceId, TaskId, TimeRange,
+    GetVideoClipRequest, GetVideoFrameAtRequest, ListVideoSourcesRequest,
+    MAX_VIDEO_CLIP_DURATION_US,
+};
+use a2a_lab_dev_kit::{
+    ImageId, ImageSourceId, JsonObject, MetricId, RunId, SourceId, TaskId, TimeRange, UtcTimestamp,
+    VideoSourceId,
 };
 use a2a_lab_dev_kit::{ListLogSourcesRequest, QueryLogsRequest};
 use a2a_lab_dev_kit::{ListMetricsRequest, QueryMetricRequest};
@@ -218,11 +223,20 @@ impl ComplianceRunner {
             );
         }
 
-        let command = command_for(case, &self.config.fixtures);
-        let (a2a, mcp) = tokio::join!(
-            execute_with_timeout(&*self.a2a, command.clone(), self.config.case_timeout),
-            execute_with_timeout(&*self.mcp, command, self.config.case_timeout)
-        );
+        let (a2a, mcp) = match command_for(case, &self.config.fixtures) {
+            PreparedCommand::Execute(command) => {
+                tokio::join!(
+                    execute_with_timeout(&*self.a2a, command.clone(), self.config.case_timeout),
+                    execute_with_timeout(&*self.mcp, command, self.config.case_timeout)
+                )
+            }
+            PreparedCommand::Rejected { code } => {
+                let outcome = NormalizedOutcome::Error {
+                    code: code.to_owned(),
+                };
+                (outcome.clone(), outcome)
+            }
+        };
         let expected = expected_for(case);
         let mut diagnostics = Vec::new();
         check_expected("a2a", &a2a, expected, &mut diagnostics);
@@ -276,6 +290,7 @@ impl ComplianceRunner {
             ComplianceScenarioCapability::Metrics => self.run_metrics_scenario(scenario).await,
             ComplianceScenarioCapability::Tasks => self.run_tasks_scenario(scenario).await,
             ComplianceScenarioCapability::Images => self.run_images_scenario(scenario).await,
+            ComplianceScenarioCapability::Videos => self.run_videos_scenario(scenario).await,
             ComplianceScenarioCapability::A2aAgentMessage => {
                 self.run_agent_message_scenario().await
             }
@@ -592,6 +607,72 @@ impl ComplianceRunner {
         }
     }
 
+    async fn run_videos_scenario(&self, scenario: &ComplianceScenario) -> Result<(), String> {
+        let listed_sources = self
+            .step(
+                scenario.producer,
+                "list_video_sources",
+                A2aLabCommand::ListVideoSources(
+                    ListVideoSourcesRequest::new(PageRequest::default())
+                        .expect("default page is valid"),
+                ),
+            )
+            .await?;
+        let A2aLabResult::ListVideoSources(page) = listed_sources else {
+            return Err("list_video_sources: returned an incompatible result".to_owned());
+        };
+        let source_id = page
+            .items()
+            .first()
+            .ok_or_else(|| "list_video_sources: discovery returned no video source".to_owned())?
+            .id()
+            .clone();
+        let at = video_frame_at(&self.config.fixtures);
+        let frame = self
+            .step(
+                scenario.consumer,
+                "get_video_frame_at",
+                A2aLabCommand::GetVideoFrameAt(GetVideoFrameAtRequest::new(
+                    source_id.clone(),
+                    at,
+                    None,
+                )),
+            )
+            .await?;
+        let A2aLabResult::GetVideoFrameAt(frame) = frame else {
+            return Err("get_video_frame_at: returned an incompatible result".to_owned());
+        };
+        if frame.image().descriptor().source_id().as_str() != source_id.as_str() {
+            return Err(
+                "get_video_frame_at: returned frame references a different source".to_owned(),
+            );
+        }
+        let clip_range = video_clip_range(&self.config.fixtures);
+        let clip = self
+            .step(
+                scenario.consumer,
+                "get_video_clip",
+                A2aLabCommand::GetVideoClip(
+                    GetVideoClipRequest::new(source_id.clone(), clip_range)
+                        .expect("linked scenario clip range is valid"),
+                ),
+            )
+            .await?;
+        let A2aLabResult::GetVideoClip(clip) = clip else {
+            return Err("get_video_clip: returned an incompatible result".to_owned());
+        };
+        let encoded = serde_json::to_value(&clip)
+            .map_err(|error| format!("get_video_clip: could not encode metadata: {error}"))?;
+        if encoded.get("data").is_some() {
+            return Err("get_video_clip: JSON result must not include clip bytes".to_owned());
+        }
+        if clip.source_id() == &source_id {
+            Ok(())
+        } else {
+            Err("get_video_clip: returned clip references a different source".to_owned())
+        }
+    }
+
     async fn step(
         &self,
         interface: ComplianceInterface,
@@ -696,7 +777,8 @@ fn expected_for(case: &ComplianceCase) -> Expected {
             | ComplianceOperation::ListMetrics
             | ComplianceOperation::ListTasks
             | ComplianceOperation::ListImageSources
-            | ComplianceOperation::ListImages,
+            | ComplianceOperation::ListImages
+            | ComplianceOperation::ListVideoSources,
         ) => Expected::PaginatedResult,
         (ComplianceCaseKind::Success | ComplianceCaseKind::Boundary, _) => Expected::Result,
         (ComplianceCaseKind::Invalid, _) => Expected::Error("invalid"),
@@ -759,6 +841,9 @@ fn scenario_required(
         ComplianceScenarioCapability::Images => {
             matches!(fixtures.images, FixtureCapability::Required(_))
         }
+        ComplianceScenarioCapability::Videos => {
+            matches!(fixtures.videos, FixtureCapability::Required(_))
+        }
         ComplianceScenarioCapability::A2aAgentMessage => true,
     }
 }
@@ -783,11 +868,22 @@ fn case_required(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> bool {
         | ComplianceOperation::GetCurrentImage => {
             matches!(fixtures.images, FixtureCapability::Required(_))
         }
+        ComplianceOperation::ListVideoSources
+        | ComplianceOperation::GetVideoFrameAt
+        | ComplianceOperation::GetVideoClip => {
+            matches!(fixtures.videos, FixtureCapability::Required(_))
+        }
     };
     available != (case.kind == ComplianceCaseKind::Unavailable)
 }
 
-fn command_for(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> A2aLabCommand {
+#[derive(Debug, Clone)]
+enum PreparedCommand {
+    Execute(A2aLabCommand),
+    Rejected { code: &'static str },
+}
+
+fn command_for(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> PreparedCommand {
     let invalid_page = || {
         serde_json::from_value(serde_json::json!({"limit": 0}))
             .expect("unchecked invalid page fixture")
@@ -803,53 +899,88 @@ fn command_for(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> A2aLabCo
     };
     match case.operation {
         ComplianceOperation::ListLogSources => {
-            A2aLabCommand::ListLogSources(ListLogSourcesRequest { page: page() })
+            execute(A2aLabCommand::ListLogSources(ListLogSourcesRequest {
+                page: page(),
+            }))
         }
         ComplianceOperation::QueryLogs => {
             let source_id = log_source(case.kind, fixtures);
-            A2aLabCommand::QueryLogs(QueryLogsRequest {
+            execute(A2aLabCommand::QueryLogs(QueryLogsRequest {
                 source_id,
                 range: range(),
                 page: PageRequest::default(),
-            })
+            }))
         }
         ComplianceOperation::ListMetrics => {
-            A2aLabCommand::ListMetrics(ListMetricsRequest { page: page() })
+            execute(A2aLabCommand::ListMetrics(ListMetricsRequest {
+                page: page(),
+            }))
         }
         ComplianceOperation::QueryMetric => {
             let metric_id = metric_id(case.kind, fixtures);
-            A2aLabCommand::QueryMetric(QueryMetricRequest {
+            execute(A2aLabCommand::QueryMetric(QueryMetricRequest {
                 metric_id,
                 range: range(),
                 page: PageRequest::default(),
-            })
+            }))
         }
         ComplianceOperation::ListTasks => {
-            A2aLabCommand::ListTasks(ListTasksRequest { page: page() })
+            execute(A2aLabCommand::ListTasks(ListTasksRequest { page: page() }))
         }
         ComplianceOperation::StartTask => {
             let (task_id, input) = task_start(case.kind, fixtures);
-            A2aLabCommand::StartTask(StartTaskRequest::new(task_id, input))
+            execute(A2aLabCommand::StartTask(StartTaskRequest::new(
+                task_id, input,
+            )))
         }
-        ComplianceOperation::GetTaskStatus => A2aLabCommand::GetTaskStatus(GetTaskStatusRequest {
-            id: run_id(case.kind, fixtures),
-        }),
+        ComplianceOperation::GetTaskStatus => {
+            execute(A2aLabCommand::GetTaskStatus(GetTaskStatusRequest {
+                id: run_id(case.kind, fixtures),
+            }))
+        }
+        ComplianceOperation::ListImageSources
+        | ComplianceOperation::ListImages
+        | ComplianceOperation::SearchImages
+        | ComplianceOperation::GetImage
+        | ComplianceOperation::GetCurrentImage => image_command_for(case, fixtures, page()),
+        ComplianceOperation::ListVideoSources => video_list_command(case.kind, page()),
+        ComplianceOperation::GetVideoFrameAt => {
+            execute(A2aLabCommand::GetVideoFrameAt(GetVideoFrameAtRequest::new(
+                video_source(case, fixtures),
+                video_lookup_at(case, fixtures),
+                video_max_delta_us(case),
+            )))
+        }
+        ComplianceOperation::GetVideoClip => video_clip_command(case, fixtures),
+    }
+}
+
+fn execute(command: A2aLabCommand) -> PreparedCommand {
+    PreparedCommand::Execute(command)
+}
+
+fn image_command_for(
+    case: &ComplianceCase,
+    fixtures: &ComplianceFixtures,
+    page: PageRequest,
+) -> PreparedCommand {
+    match case.operation {
         ComplianceOperation::ListImageSources => {
             let request = if case.kind == ComplianceCaseKind::Invalid {
                 TckMalformedImageRequests::list_image_sources_zero_limit()
             } else {
-                ListImageSourcesRequest::new(page()).expect("page request")
+                ListImageSourcesRequest::new(page).expect("page request")
             };
-            A2aLabCommand::ListImageSources(request)
+            execute(A2aLabCommand::ListImageSources(request))
         }
         ComplianceOperation::ListImages => {
             let source_id = image_source(case.kind, fixtures);
             let request = if case.kind == ComplianceCaseKind::Invalid {
                 TckMalformedImageRequests::list_images_zero_limit(source_id)
             } else {
-                ListImagesRequest::new(source_id, page()).expect("image list request")
+                ListImagesRequest::new(source_id, page).expect("image list request")
             };
-            A2aLabCommand::ListImages(request)
+            execute(A2aLabCommand::ListImages(request))
         }
         ComplianceOperation::SearchImages => {
             let request = if case.kind == ComplianceCaseKind::Invalid {
@@ -859,18 +990,59 @@ fn command_for(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> A2aLabCo
                     Some(image_source(case.kind, fixtures)),
                     Some(fixtures.range),
                     None,
-                    page(),
+                    page,
                 )
                 .expect("image search request")
             };
-            A2aLabCommand::SearchImages(request)
+            execute(A2aLabCommand::SearchImages(request))
         }
-        ComplianceOperation::GetImage => {
-            A2aLabCommand::GetImage(GetImageRequest::new(image_id(case.kind, fixtures)))
-        }
-        ComplianceOperation::GetCurrentImage => A2aLabCommand::GetCurrentImage(
+        ComplianceOperation::GetImage => execute(A2aLabCommand::GetImage(GetImageRequest::new(
+            image_id(case.kind, fixtures),
+        ))),
+        ComplianceOperation::GetCurrentImage => execute(A2aLabCommand::GetCurrentImage(
             GetCurrentImageRequest::new(image_source(case.kind, fixtures)),
-        ),
+        )),
+        _ => unreachable!("image helper received a non-image operation"),
+    }
+}
+
+fn video_list_command(kind: ComplianceCaseKind, page: PageRequest) -> PreparedCommand {
+    if kind == ComplianceCaseKind::Invalid {
+        return malformed_or_rejected(serde_json::json!({"page": {"limit": 0}}), |request| {
+            A2aLabCommand::ListVideoSources(request)
+        });
+    }
+    execute(A2aLabCommand::ListVideoSources(
+        ListVideoSourcesRequest::new(page).expect("page request"),
+    ))
+}
+
+fn video_clip_command(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> PreparedCommand {
+    let source_id = video_source(case, fixtures);
+    let range = video_clip_request_range(case, fixtures);
+    let json = serde_json::json!({
+        "source_id": source_id,
+        "range": range
+    });
+    match case.kind {
+        ComplianceCaseKind::Invalid => malformed_or_rejected(json, A2aLabCommand::GetVideoClip),
+        _ => match GetVideoClipRequest::new(source_id, range) {
+            Ok(request) => execute(A2aLabCommand::GetVideoClip(request)),
+            Err(_) => PreparedCommand::Rejected { code: "invalid" },
+        },
+    }
+}
+
+fn malformed_or_rejected<T>(
+    json: serde_json::Value,
+    wrap: impl FnOnce(T) -> A2aLabCommand,
+) -> PreparedCommand
+where
+    T: serde::de::DeserializeOwned,
+{
+    match serde_json::from_value::<T>(json) {
+        Ok(request) => execute(wrap(request)),
+        Err(_) => PreparedCommand::Rejected { code: "invalid" },
     }
 }
 
@@ -937,6 +1109,89 @@ fn image_id(kind: ComplianceCaseKind, fixtures: &ComplianceFixtures) -> ImageId 
         (FixtureCapability::Required(value), _) => value.image_id.clone(),
         (FixtureCapability::Unavailable, _) => ImageId::new("compliance.unavailable").unwrap(),
     }
+}
+
+fn video_source(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> VideoSourceId {
+    match (&fixtures.videos, case.kind, case.id) {
+        (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, id)
+            if id.contains("empty") =>
+        {
+            value.empty_source_id.clone()
+        }
+        (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, id)
+            if id.contains("unavailable-endpoint") =>
+        {
+            value.missing_source_id.clone()
+        }
+        (FixtureCapability::Required(value), _, _) => value.source_id.clone(),
+        (FixtureCapability::Unavailable, _, _) => {
+            VideoSourceId::new("compliance.unavailable").unwrap()
+        }
+    }
+}
+
+fn video_lookup_at(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> UtcTimestamp {
+    match (&fixtures.videos, case.id) {
+        (FixtureCapability::Required(value), "videos.frame.nearest") => value.nearest_at,
+        (FixtureCapability::Required(value), "videos.frame.outside-coverage") => value.outside_at,
+        (FixtureCapability::Required(value), "videos.frame.gap") => value.gap_at,
+        (FixtureCapability::Required(value), _) => value.frame_at,
+        (FixtureCapability::Unavailable, _) => fixtures.range.start(),
+    }
+}
+
+fn video_max_delta_us(case: &ComplianceCase) -> Option<u64> {
+    (case.id == "videos.frame.nearest").then_some(1_000_000)
+}
+
+fn video_frame_at(fixtures: &ComplianceFixtures) -> UtcTimestamp {
+    match &fixtures.videos {
+        FixtureCapability::Required(value) => value.frame_at,
+        FixtureCapability::Unavailable => fixtures.range.start(),
+    }
+}
+
+fn video_clip_range(fixtures: &ComplianceFixtures) -> TimeRange {
+    match &fixtures.videos {
+        FixtureCapability::Required(value) => value.clip_range,
+        FixtureCapability::Unavailable => fallback_clip_range(fixtures.range),
+    }
+}
+
+fn video_clip_request_range(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> TimeRange {
+    match (&fixtures.videos, case.kind, case.id) {
+        (_, ComplianceCaseKind::Invalid, "videos.clip.reversed-range") => {
+            reversed_range(video_clip_range(fixtures))
+        }
+        (_, ComplianceCaseKind::Invalid, _) => over_limit_range(video_clip_range(fixtures)),
+        (
+            FixtureCapability::Required(value),
+            ComplianceCaseKind::NotFound,
+            "videos.clip.outside-coverage",
+        ) => value.outside_range,
+        (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, "videos.clip.gap") => {
+            value.gap_range
+        }
+        _ => video_clip_range(fixtures),
+    }
+}
+
+fn fallback_clip_range(range: TimeRange) -> TimeRange {
+    TimeRange::new(
+        range.start(),
+        range.start().saturating_add_micros(1_000_000),
+    )
+    .expect("one-second clip range")
+}
+
+fn over_limit_range(range: TimeRange) -> TimeRange {
+    TimeRange::new(
+        range.start(),
+        range.start().saturating_add_micros(
+            i64::try_from(MAX_VIDEO_CLIP_DURATION_US + 1).unwrap_or(i64::MAX),
+        ),
+    )
+    .expect("over-limit clip range is still a valid time interval")
 }
 
 fn reversed_range(range: TimeRange) -> TimeRange {
@@ -1028,6 +1283,21 @@ impl ComplianceEndpoint for A2aEndpoint {
                     .get_current_image(request)
                     .await
                     .map(A2aLabResult::GetCurrentImage),
+                A2aLabCommand::ListVideoSources(request) => self
+                    .0
+                    .list_video_sources(request)
+                    .await
+                    .map(A2aLabResult::ListVideoSources),
+                A2aLabCommand::GetVideoFrameAt(request) => self
+                    .0
+                    .get_video_frame_at(request)
+                    .await
+                    .map(A2aLabResult::GetVideoFrameAt),
+                A2aLabCommand::GetVideoClip(request) => self
+                    .0
+                    .get_video_clip(request)
+                    .await
+                    .map(A2aLabResult::GetVideoClip),
             }
         })
     }

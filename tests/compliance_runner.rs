@@ -3,15 +3,16 @@ use std::time::Duration;
 
 use a2a_lab_dev_kit::{
     A2aLabCommand, A2aLabError, A2aLabFuture, A2aLabResult, A2aLabService, A2aServer,
-    AgentMessageResponse, GetTaskStatusRequest, Image, ImageDescriptor, ImageSource, JsonObject,
-    LogSource, McpServer, MemoryLogs, MemoryMetrics, MemoryTasks, MetricDescriptor, Page, RunId,
-    TaskDefinition, TaskRun, TaskState, TimeRange, UtcTimestamp, bind_local,
+    AgentMessageResponse, GetTaskStatusRequest, GetVideoFrameAtResult, Image, ImageDescriptor,
+    ImageSource, JsonObject, LogSource, MJPEG_MEDIA_TYPE, McpServer, MemoryLogs, MemoryMetrics,
+    MemoryTasks, MetricDescriptor, Page, RunId, TaskDefinition, TaskRun, TaskState, TimeRange,
+    UtcTimestamp, VideoClip, VideoSource, bind_local,
 };
 use a2a_lab_tck::{
     COMPLIANCE_PROFILE_VERSION, ComplianceCheck, ComplianceEndpoint, ComplianceFixtures,
     ComplianceOutcome, ComplianceResult, ComplianceRunner, ComplianceRunnerConfig, ComplianceSuite,
     FixtureCapability, ImageFixtures, ImplementationIdentity, LogFixtures, MetricFixtures,
-    TaskFixtures, compliance_profile, compliance_suite,
+    TaskFixtures, VideoFixtures, compliance_profile, compliance_suite,
 };
 
 fn fixtures() -> ComplianceFixtures {
@@ -47,6 +48,31 @@ fn fixtures() -> ComplianceFixtures {
             alternate_image_id: id("images.secondary"),
             missing_source_id: id("images.sources.missing"),
             missing_image_id: id("images.missing"),
+        }),
+        videos: FixtureCapability::Required(VideoFixtures {
+            source_id: id("videos.sources.primary"),
+            alternate_source_id: id("videos.sources.secondary"),
+            missing_source_id: id("videos.sources.missing"),
+            empty_source_id: id("videos.sources.empty"),
+            frame_at: timestamp("2026-01-01T00:00:00Z"),
+            nearest_at: timestamp("2026-01-01T00:00:00.500000Z"),
+            outside_at: timestamp("2026-01-02T00:00:00Z"),
+            gap_at: timestamp("2026-01-01T12:00:00Z"),
+            clip_range: TimeRange::new(
+                timestamp("2026-01-01T00:00:00Z"),
+                timestamp("2026-01-01T00:00:01Z"),
+            )
+            .unwrap(),
+            outside_range: TimeRange::new(
+                timestamp("2026-01-02T00:00:00Z"),
+                timestamp("2026-01-02T00:00:01Z"),
+            )
+            .unwrap(),
+            gap_range: TimeRange::new(
+                timestamp("2026-01-01T12:00:00Z"),
+                timestamp("2026-01-01T12:00:01Z"),
+            )
+            .unwrap(),
         }),
     }
 }
@@ -193,6 +219,7 @@ async fn unavailable_capabilities_skip_only_nonrequired_cases() {
         metrics: FixtureCapability::Unavailable,
         tasks: FixtureCapability::Unavailable,
         images: FixtureCapability::Unavailable,
+        videos: FixtureCapability::Unavailable,
         ..fixtures()
     };
     let endpoint: Arc<dyn ComplianceEndpoint> = Arc::new(UnavailableEndpoint);
@@ -202,7 +229,7 @@ async fn unavailable_capabilities_skip_only_nonrequired_cases() {
         .unwrap();
 
     assert!(result.compliant);
-    assert_eq!(result.cases.iter().filter(|case| case.required).count(), 12);
+    assert_eq!(result.cases.iter().filter(|case| case.required).count(), 15);
     assert!(result.cases.iter().all(|case| {
         if case.required {
             case.outcome == ComplianceOutcome::Pass
@@ -351,6 +378,14 @@ async fn full_runs_basic_cases_and_all_non_llm_linked_scenarios() {
             a2a_lab_tck::ComplianceInterface::A2a,
         ],
     );
+    assert_handoff(
+        &result,
+        "videos.link.a2a-mcp",
+        [
+            a2a_lab_tck::ComplianceInterface::A2a,
+            a2a_lab_tck::ComplianceInterface::Mcp,
+        ],
+    );
 
     let a2a = a2a_commands.lock().unwrap();
     let mcp = mcp_commands.lock().unwrap();
@@ -358,6 +393,7 @@ async fn full_runs_basic_cases_and_all_non_llm_linked_scenarios() {
     assert!(has_query_metric(&a2a, "metrics.discovered"));
     assert!(has_task_status(&mcp, "runs.started"));
     assert!(has_get_image(&a2a, "images.discovered"));
+    assert!(has_get_video_clip(&mcp, "videos.sources.discovered"));
 }
 
 #[tokio::test]
@@ -569,6 +605,7 @@ async fn command_writes_reports_and_maps_compliance_to_exit_status() {
         metrics: FixtureCapability::Unavailable,
         tasks: FixtureCapability::Unavailable,
         images: FixtureCapability::Unavailable,
+        videos: FixtureCapability::Unavailable,
         ..fixtures()
     };
     let fixture_path = temporary_path("fixtures.json");
@@ -989,6 +1026,9 @@ fn fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabError> {
         | A2aLabCommand::SearchImages(_)
         | A2aLabCommand::GetImage(_)
         | A2aLabCommand::GetCurrentImage(_)) => image_fixture_result(command),
+        command @ (A2aLabCommand::ListVideoSources(_)
+        | A2aLabCommand::GetVideoFrameAt(_)
+        | A2aLabCommand::GetVideoClip(_)) => video_fixture_result(command),
     }
 }
 
@@ -1050,6 +1090,97 @@ fn image_fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabEr
         }
         _ => unreachable!("image fixture helper received a non-image command"),
     }
+}
+
+fn video_fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabError> {
+    match command {
+        A2aLabCommand::ListVideoSources(request) => {
+            request.page().check()?;
+            Ok(A2aLabResult::ListVideoSources(item_page(
+                video_source("videos.sources.discovered"),
+                request.page(),
+            )))
+        }
+        A2aLabCommand::GetVideoFrameAt(request) => {
+            video_coverage_missing(request.source_id().as_str(), request.at())?;
+            Ok(A2aLabResult::GetVideoFrameAt(GetVideoFrameAtResult::new(
+                request.at(),
+                video_frame(request.source_id().as_str(), request.at()),
+            )))
+        }
+        A2aLabCommand::GetVideoClip(request) => {
+            request.check()?;
+            video_clip_missing(request.source_id().as_str(), request.range())?;
+            Ok(A2aLabResult::GetVideoClip(
+                VideoClip::new(
+                    id("videos.clips.primary"),
+                    request.source_id().clone(),
+                    request.range(),
+                    request.range(),
+                    MJPEG_MEDIA_TYPE,
+                )
+                .unwrap(),
+            ))
+        }
+        _ => unreachable!("video fixture helper received a non-video command"),
+    }
+}
+
+fn video_source(source_id: &str) -> VideoSource {
+    VideoSource::new(
+        id(source_id),
+        "Discovered camera",
+        "Linked scenario fixture",
+        None,
+        None,
+        1,
+        1,
+        1,
+        MJPEG_MEDIA_TYPE,
+    )
+    .unwrap()
+}
+
+fn video_frame(source_id: &str, captured_at: UtcTimestamp) -> Image {
+    Image::new(
+        ImageDescriptor::new(
+            id("videos.frames.primary"),
+            id(source_id),
+            captured_at,
+            "image/jpeg",
+            1,
+            1,
+            None,
+            JsonObject::empty(),
+        )
+        .unwrap(),
+        vec![0xFF, 0xD8, 0xFF, 0xD9],
+    )
+    .unwrap()
+}
+
+fn video_coverage_missing(source_id: &str, at: UtcTimestamp) -> Result<(), A2aLabError> {
+    missing(source_id)?;
+    if source_id.contains("empty") {
+        return Err(A2aLabError::not_found("video frame", source_id));
+    }
+    let stamp = at.to_rfc3339();
+    if stamp.contains("T12:") || stamp.starts_with("2026-01-02") {
+        return Err(A2aLabError::not_found("video frame", stamp));
+    }
+    Ok(())
+}
+
+fn video_clip_missing(source_id: &str, range: TimeRange) -> Result<(), A2aLabError> {
+    missing(source_id)?;
+    if source_id.contains("empty") {
+        return Err(A2aLabError::not_found("video coverage", source_id));
+    }
+    let stamp = range.start().to_rfc3339();
+    if stamp.contains("T12:") || stamp.starts_with("2026-01-02") {
+        return Err(A2aLabError::not_found("video coverage", stamp));
+    }
+    Ok(())
 }
 
 fn empty_page<T>(request: &a2a_lab_dev_kit::PageRequest) -> Page<T> {
@@ -1162,6 +1293,15 @@ fn has_get_image(commands: &[A2aLabCommand], expected: &str) -> bool {
         matches!(
             command,
             A2aLabCommand::GetImage(request) if request.id().as_str() == expected
+        )
+    })
+}
+
+fn has_get_video_clip(commands: &[A2aLabCommand], expected: &str) -> bool {
+    commands.iter().any(|command| {
+        matches!(
+            command,
+            A2aLabCommand::GetVideoClip(request) if request.source_id().as_str() == expected
         )
     })
 }

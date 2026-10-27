@@ -12,8 +12,8 @@ pub use compliance::{
     ComplianceScenario, ComplianceScenarioAssertion, ComplianceScenarioCapability,
     ComplianceScenarioResult, ComplianceSuite, ComplianceSuiteContract, ComplianceValidationError,
     ComplianceValidationErrors, FixtureCapability, ImageFixtures, ImplementationIdentity,
-    LogFixtures, MetricFixtures, OperationContract, TaskFixtures, cases_by_operation,
-    compliance_profile, compliance_result_schema, compliance_suite,
+    LogFixtures, MetricFixtures, OperationContract, TaskFixtures, VideoFixtures,
+    cases_by_operation, compliance_profile, compliance_result_schema, compliance_suite,
 };
 pub use compliance_runner::{
     ComplianceEndpoint, ComplianceRunError, ComplianceRunner, ComplianceRunnerConfig,

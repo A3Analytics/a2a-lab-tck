@@ -152,5 +152,5 @@ fn required<T>(value: Option<T>, flag: &str) -> Result<T, String> {
 fn usage() -> &'static str {
     "usage: a2a-lab-compliance --a2a-url URL --mcp-url URL --fixtures FILE --report FILE \
      --implementation-name NAME --implementation-version VERSION \
-     [--profile 1.1.0] [--suite basic|full] [--no-llm-check] [--timeout-milliseconds N]"
+     [--profile 1.2.0] [--suite basic|full] [--no-llm-check] [--timeout-milliseconds N]"
 }

@@ -25,8 +25,8 @@ require_nonblank "implementation-name" "${INPUT_IMPLEMENTATION_NAME:-}"
 require_nonblank "implementation-version" "${INPUT_IMPLEMENTATION_VERSION:-}"
 require_url "a2a-url" "${INPUT_A2A_URL:-}"
 require_url "mcp-url" "${INPUT_MCP_URL:-}"
-[[ "${INPUT_PROFILE:-}" == "1.1.0" ]] ||
-  fail "profile must be 1.1.0"
+[[ "${INPUT_PROFILE:-}" == "1.2.0" ]] ||
+  fail "profile must be 1.2.0"
 [[ "${INPUT_SUITE:-}" == "basic" || "${INPUT_SUITE:-}" == "full" ]] ||
   fail "suite must be basic or full"
 [[ "${INPUT_LLM_CHECK:-}" == "true" || "${INPUT_LLM_CHECK:-}" == "false" ]] ||
