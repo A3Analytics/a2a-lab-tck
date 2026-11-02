@@ -11,7 +11,8 @@ use crate::compliance::{
     ComplianceCase, ComplianceCaseKind, ComplianceCaseResult, ComplianceCheck, ComplianceFixtures,
     ComplianceInterface, ComplianceOperation, ComplianceOutcome, ComplianceResult,
     ComplianceScenario, ComplianceScenarioCapability, ComplianceScenarioResult, ComplianceSuite,
-    FixtureCapability, ImplementationIdentity, compliance_suite,
+    FixtureCapability, ImplementationIdentity, OperationContract, compliance_profile,
+    compliance_suite,
 };
 use a2a_lab_dev_kit::A2aLabError;
 use a2a_lab_dev_kit::McpLab;
@@ -19,14 +20,14 @@ use a2a_lab_dev_kit::PageRequest;
 use a2a_lab_dev_kit::{A2aClient, AgentMessageResponse};
 use a2a_lab_dev_kit::{A2aLabApi, A2aLabCommand, A2aLabFuture, A2aLabResult};
 use a2a_lab_dev_kit::{
+    FollowVideoRequest, GetVideoClipRequest, GetVideoFrameAtRequest, GetVideoTimelineRequest,
+    ListVideoSourcesRequest, TckMalformedVideoRequests,
+};
+use a2a_lab_dev_kit::{
     GetCurrentImageRequest, GetImageRequest, ListImageSourcesRequest, ListImagesRequest,
     SearchImagesRequest, TckMalformedImageRequests,
 };
 use a2a_lab_dev_kit::{GetTaskStatusRequest, ListTasksRequest, StartTaskRequest};
-use a2a_lab_dev_kit::{
-    GetVideoClipRequest, GetVideoFrameAtRequest, ListVideoSourcesRequest,
-    MAX_VIDEO_CLIP_DURATION_US,
-};
 use a2a_lab_dev_kit::{
     ImageId, ImageSourceId, JsonObject, MetricId, RunId, SourceId, TaskId, TimeRange, UtcTimestamp,
     VideoSourceId,
@@ -248,6 +249,14 @@ impl ComplianceRunner {
                 normalized_json(&a2a),
                 normalized_json(&mcp)
             ));
+        }
+        let outcome = if diagnostics.is_empty() {
+            ComplianceOutcome::Pass
+        } else {
+            ComplianceOutcome::Fail
+        };
+        if outcome == ComplianceOutcome::Pass {
+            check_observable_fields(case, &a2a, &mcp, &mut diagnostics);
         }
         let outcome = if diagnostics.is_empty() {
             ComplianceOutcome::Pass
@@ -661,15 +670,48 @@ impl ComplianceRunner {
         let A2aLabResult::GetVideoClip(clip) = clip else {
             return Err("get_video_clip: returned an incompatible result".to_owned());
         };
-        let encoded = serde_json::to_value(&clip)
+        let encoded = redacted_result_json(&A2aLabResult::GetVideoClip(clip.clone()))
             .map_err(|error| format!("get_video_clip: could not encode metadata: {error}"))?;
         if encoded.get("data").is_some() {
             return Err("get_video_clip: JSON result must not include clip bytes".to_owned());
         }
-        if clip.source_id() == &source_id {
+        if clip.source_id() != &source_id {
+            return Err("get_video_clip: returned clip references a different source".to_owned());
+        }
+        let timeline = self
+            .step(
+                scenario.consumer,
+                "get_video_timeline",
+                A2aLabCommand::GetVideoTimeline(GetVideoTimelineRequest::new(source_id.clone())),
+            )
+            .await?;
+        let A2aLabResult::GetVideoTimeline(timeline) = timeline else {
+            return Err("get_video_timeline: returned an incompatible result".to_owned());
+        };
+        if timeline.source_id() != &source_id {
+            return Err(
+                "get_video_timeline: returned timeline references a different source".to_owned(),
+            );
+        }
+        let follow = self
+            .step(
+                scenario.consumer,
+                "follow_video",
+                A2aLabCommand::FollowVideo(FollowVideoRequest::new(source_id.clone())),
+            )
+            .await?;
+        let A2aLabResult::FollowVideo(follow) = follow else {
+            return Err("follow_video: returned an incompatible result".to_owned());
+        };
+        let encoded = redacted_result_json(&A2aLabResult::FollowVideo(follow.clone()))
+            .map_err(|error| format!("follow_video: could not encode metadata: {error}"))?;
+        if encoded.get("data").is_some() || encoded.get("playlist").is_some() {
+            return Err("follow_video: JSON result must not include live frame bytes".to_owned());
+        }
+        if follow.source_id() == &source_id {
             Ok(())
         } else {
-            Err("get_video_clip: returned clip references a different source".to_owned())
+            Err("follow_video: returned follow references a different source".to_owned())
         }
     }
 
@@ -729,7 +771,7 @@ async fn execute_with_timeout(
     timeout: Duration,
 ) -> NormalizedOutcome {
     match tokio::time::timeout(timeout, endpoint.execute(command)).await {
-        Ok(Ok(result)) => match serde_json::to_value(result) {
+        Ok(Ok(result)) => match redacted_result_json(&result) {
             Ok(value) => NormalizedOutcome::Result { value },
             Err(_) => NormalizedOutcome::Error {
                 code: "protocol".to_owned(),
@@ -770,6 +812,9 @@ fn check_expected(
 }
 
 fn expected_for(case: &ComplianceCase) -> Expected {
+    if case.id == "videos.follow.live-unavailable" {
+        return Expected::Error("live_unavailable");
+    }
     match (case.kind, case.operation) {
         (
             ComplianceCaseKind::Boundary,
@@ -797,6 +842,283 @@ fn expected_name(expected: Expected) -> &'static str {
 
 fn result_page(value: &serde_json::Value) -> Option<&serde_json::Value> {
     value.get("result")
+}
+
+fn redacted_result_json(result: &A2aLabResult) -> Result<serde_json::Value, serde_json::Error> {
+    let mut value = serde_json::to_value(result)?;
+    redact_sensitive_lab_fields(&mut value);
+    Ok(value)
+}
+
+fn redact_sensitive_lab_fields(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if map.contains_key("data")
+                && (map.contains_key("descriptor") || map.contains_key("image"))
+            {
+                map.remove("data");
+            }
+            for forbidden in ["playlist", "credential", "credentials"] {
+                map.remove(forbidden);
+            }
+            if let Some(playback) = map.get_mut("playback_8x")
+                && let Some(playback_map) = playback.as_object_mut()
+            {
+                for forbidden in ["data", "playlist", "credential", "credentials", "bytes"] {
+                    playback_map.remove(forbidden);
+                }
+            }
+            for nested in map.values_mut() {
+                redact_sensitive_lab_fields(nested);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                redact_sensitive_lab_fields(item);
+            }
+        }
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => {}
+    }
+}
+
+fn operation_contract(operation: ComplianceOperation) -> Option<&'static OperationContract> {
+    compliance_profile()
+        .operations
+        .iter()
+        .find(|contract| contract.operation == operation)
+}
+
+fn check_observable_fields(
+    case: &ComplianceCase,
+    a2a: &NormalizedOutcome,
+    mcp: &NormalizedOutcome,
+    diagnostics: &mut Vec<String>,
+) {
+    if !matches!(
+        case.operation,
+        ComplianceOperation::GetVideoFrameAt
+            | ComplianceOperation::GetVideoClip
+            | ComplianceOperation::GetVideoTimeline
+            | ComplianceOperation::FollowVideo
+    ) {
+        return;
+    }
+    let Some(contract) = operation_contract(case.operation) else {
+        return;
+    };
+    if !matches!(
+        case.kind,
+        ComplianceCaseKind::Success | ComplianceCaseKind::Boundary
+    ) {
+        return;
+    }
+    check_interface_observable_fields("a2a", case, contract, a2a, diagnostics);
+    check_interface_observable_fields("mcp", case, contract, mcp, diagnostics);
+}
+
+fn check_interface_observable_fields(
+    interface: &str,
+    case: &ComplianceCase,
+    contract: &OperationContract,
+    actual: &NormalizedOutcome,
+    diagnostics: &mut Vec<String>,
+) {
+    let NormalizedOutcome::Result { value } = actual else {
+        return;
+    };
+    let Some(payload) = result_payload(value) else {
+        diagnostics.push(format!(
+            "{interface}: {case_id} result is missing observable payload",
+            case_id = case.id
+        ));
+        return;
+    };
+    for field in contract.observable_fields {
+        if *field == "newest_at" && case.id == "videos.timeline.empty-retention" {
+            continue;
+        }
+        if payload.get(*field).is_none() {
+            diagnostics.push(format!(
+                "{interface}: {case_id} result is missing `{field}`",
+                case_id = case.id
+            ));
+        }
+    }
+    for field in contract.optional_observable_fields {
+        if *field == "playback_8x" {
+            check_playback_8x_metadata(interface, case, payload, diagnostics);
+        }
+    }
+    if case.id == "videos.timeline.success" {
+        check_populated_timeline_shape(interface, case.id, payload, diagnostics);
+    }
+}
+
+const PLAYBACK_8X_REQUIRED_CASES: &[&str] = &["videos.clip.success", "videos.follow.live-edge"];
+
+fn check_playback_8x_metadata(
+    interface: &str,
+    case: &ComplianceCase,
+    payload: &serde_json::Value,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(value) = payload.get("playback_8x") else {
+        if PLAYBACK_8X_REQUIRED_CASES.contains(&case.id) {
+            diagnostics.push(format!(
+                "{interface}: {case_id} result is missing optional `playback_8x` metadata",
+                case_id = case.id
+            ));
+        }
+        return;
+    };
+    let Some(object) = value.as_object() else {
+        diagnostics.push(format!(
+            "{interface}: {case_id} `playback_8x` must be a metadata object",
+            case_id = case.id
+        ));
+        return;
+    };
+    for forbidden in ["data", "playlist", "credential", "credentials", "bytes"] {
+        if object.contains_key(forbidden) {
+            diagnostics.push(format!(
+                "{interface}: {case_id} `playback_8x` must not include `{forbidden}`",
+                case_id = case.id
+            ));
+        }
+    }
+    let fallback = object.get("fallback_path").and_then(|item| item.as_str());
+    if fallback.is_none_or(str::is_empty) {
+        diagnostics.push(format!(
+            "{interface}: {case_id} `playback_8x.fallback_path` must be a nonblank relative path",
+            case_id = case.id
+        ));
+    }
+    if let Some(reason) = object.get("unavailable_reason")
+        && !reason.is_string()
+    {
+        diagnostics.push(format!(
+            "{interface}: {case_id} `playback_8x.unavailable_reason` must be a string when present",
+            case_id = case.id
+        ));
+    }
+    if let Some(path) = object.get("rendition_path")
+        && !path.is_null()
+        && !path.is_string()
+    {
+        diagnostics.push(format!(
+            "{interface}: {case_id} `playback_8x.rendition_path` must be a string or null",
+            case_id = case.id
+        ));
+    }
+}
+
+fn check_populated_timeline_shape(
+    interface: &str,
+    case_id: &str,
+    payload: &serde_json::Value,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(intervals) = payload.get("intervals").and_then(|value| value.as_array()) else {
+        diagnostics.push(format!(
+            "{interface}: {case_id} timeline is missing `intervals`"
+        ));
+        return;
+    };
+    if intervals.len() < 2 {
+        diagnostics.push(format!(
+            "{interface}: {case_id} timeline must expose at least two ordered retained intervals"
+        ));
+        return;
+    }
+    let mut previous_end: Option<UtcTimestamp> = None;
+    for (index, interval) in intervals.iter().enumerate() {
+        let Some(start) = interval
+            .get("start")
+            .and_then(|value| value.as_str())
+            .and_then(|value| UtcTimestamp::parse(value).ok())
+        else {
+            diagnostics.push(format!(
+                "{interface}: {case_id} intervals[{index}].start must be a UTC timestamp"
+            ));
+            continue;
+        };
+        let Some(end) = interval
+            .get("end")
+            .and_then(|value| value.as_str())
+            .and_then(|value| UtcTimestamp::parse(value).ok())
+        else {
+            diagnostics.push(format!(
+                "{interface}: {case_id} intervals[{index}].end must be a UTC timestamp"
+            ));
+            continue;
+        };
+        if start.as_micros() >= end.as_micros() {
+            diagnostics.push(format!(
+                "{interface}: {case_id} intervals[{index}] must be a half-open range"
+            ));
+        }
+        if let Some(previous_end) = previous_end {
+            if start.as_micros() < previous_end.as_micros() {
+                diagnostics.push(format!(
+                    "{interface}: {case_id} intervals must be ordered without overlap"
+                ));
+            }
+            if start.as_micros() <= previous_end.as_micros() {
+                diagnostics.push(format!(
+                    "{interface}: {case_id} intervals[{index}] must start after the prior interval ends"
+                ));
+            }
+        }
+        previous_end = Some(end);
+    }
+    let Some(newest_at) = payload
+        .get("newest_at")
+        .and_then(|value| value.as_str())
+        .and_then(|value| UtcTimestamp::parse(value).ok())
+    else {
+        diagnostics.push(format!(
+            "{interface}: {case_id} populated timeline must include `newest_at`"
+        ));
+        return;
+    };
+    let Some(last) = intervals.last().and_then(|interval| {
+        let start = interval.get("start")?.as_str()?;
+        let end = interval.get("end")?.as_str()?;
+        Some((start, end))
+    }) else {
+        return;
+    };
+    let Ok(last_start) = UtcTimestamp::parse(last.0) else {
+        return;
+    };
+    let Ok(last_end) = UtcTimestamp::parse(last.1) else {
+        return;
+    };
+    if newest_at.as_micros() < last_start.as_micros()
+        || newest_at.as_micros() >= last_end.as_micros()
+    {
+        diagnostics.push(format!(
+            "{interface}: {case_id} `newest_at` must lie inside the newest retained interval"
+        ));
+    }
+    if payload
+        .get("live_available")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        diagnostics.push(format!(
+            "{interface}: {case_id} populated timeline must set `live_available` true"
+        ));
+    }
+}
+
+fn result_payload(value: &serde_json::Value) -> Option<&serde_json::Value> {
+    value
+        .get("result")
+        .or_else(|| value.as_object().and_then(|map| map.values().next()))
 }
 
 fn normalized_json(outcome: &NormalizedOutcome) -> String {
@@ -870,7 +1192,9 @@ fn case_required(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> bool {
         }
         ComplianceOperation::ListVideoSources
         | ComplianceOperation::GetVideoFrameAt
-        | ComplianceOperation::GetVideoClip => {
+        | ComplianceOperation::GetVideoClip
+        | ComplianceOperation::GetVideoTimeline
+        | ComplianceOperation::FollowVideo => {
             matches!(fixtures.videos, FixtureCapability::Required(_))
         }
     };
@@ -952,6 +1276,18 @@ fn command_for(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> Prepared
             )))
         }
         ComplianceOperation::GetVideoClip => video_clip_command(case, fixtures),
+        ComplianceOperation::GetVideoTimeline => execute(A2aLabCommand::GetVideoTimeline(
+            GetVideoTimelineRequest::new(video_source(case, fixtures)),
+        )),
+        ComplianceOperation::FollowVideo => {
+            let source_id = video_source(case, fixtures);
+            let request = if case.id == "videos.follow.anchored" {
+                FollowVideoRequest::at(source_id, follow_anchor_at(fixtures))
+            } else {
+                FollowVideoRequest::new(source_id)
+            };
+            execute(A2aLabCommand::FollowVideo(request))
+        }
     }
 }
 
@@ -1008,9 +1344,9 @@ fn image_command_for(
 
 fn video_list_command(kind: ComplianceCaseKind, page: PageRequest) -> PreparedCommand {
     if kind == ComplianceCaseKind::Invalid {
-        return malformed_or_rejected(serde_json::json!({"page": {"limit": 0}}), |request| {
-            A2aLabCommand::ListVideoSources(request)
-        });
+        return execute(A2aLabCommand::ListVideoSources(
+            TckMalformedVideoRequests::list_video_sources_zero_limit(),
+        ));
     }
     execute(A2aLabCommand::ListVideoSources(
         ListVideoSourcesRequest::new(page).expect("page request"),
@@ -1019,30 +1355,26 @@ fn video_list_command(kind: ComplianceCaseKind, page: PageRequest) -> PreparedCo
 
 fn video_clip_command(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> PreparedCommand {
     let source_id = video_source(case, fixtures);
-    let range = video_clip_request_range(case, fixtures);
-    let json = serde_json::json!({
-        "source_id": source_id,
-        "range": range
-    });
-    match case.kind {
-        ComplianceCaseKind::Invalid => malformed_or_rejected(json, A2aLabCommand::GetVideoClip),
-        _ => match GetVideoClipRequest::new(source_id, range) {
-            Ok(request) => execute(A2aLabCommand::GetVideoClip(request)),
-            Err(_) => PreparedCommand::Rejected { code: "invalid" },
-        },
-    }
-}
-
-fn malformed_or_rejected<T>(
-    json: serde_json::Value,
-    wrap: impl FnOnce(T) -> A2aLabCommand,
-) -> PreparedCommand
-where
-    T: serde::de::DeserializeOwned,
-{
-    match serde_json::from_value::<T>(json) {
-        Ok(request) => execute(wrap(request)),
-        Err(_) => PreparedCommand::Rejected { code: "invalid" },
+    match (case.kind, case.id) {
+        (ComplianceCaseKind::Invalid, "videos.clip.reversed-range") => execute(
+            A2aLabCommand::GetVideoClip(TckMalformedVideoRequests::get_video_clip_reversed_range(
+                source_id,
+                video_clip_range(fixtures),
+            )),
+        ),
+        (ComplianceCaseKind::Invalid, "videos.clip.empty-range") => execute(
+            A2aLabCommand::GetVideoClip(TckMalformedVideoRequests::get_video_clip_empty_range(
+                source_id,
+                fixtures.range.start(),
+            )),
+        ),
+        _ => {
+            let range = video_clip_request_range(case, fixtures);
+            match GetVideoClipRequest::new(source_id, range) {
+                Ok(request) => execute(A2aLabCommand::GetVideoClip(request)),
+                Err(_) => PreparedCommand::Rejected { code: "invalid" },
+            }
+        }
     }
 }
 
@@ -1113,10 +1445,21 @@ fn image_id(kind: ComplianceCaseKind, fixtures: &ComplianceFixtures) -> ImageId 
 
 fn video_source(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> VideoSourceId {
     match (&fixtures.videos, case.kind, case.id) {
+        (FixtureCapability::Required(value), _, "videos.timeline.empty-retention") => {
+            value.empty_source_id.clone()
+        }
+        (FixtureCapability::Required(value), _, "videos.follow.live-unavailable") => {
+            value.live_unavailable_source_id.clone()
+        }
         (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, id)
             if id.contains("empty") =>
         {
             value.empty_source_id.clone()
+        }
+        (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, id)
+            if id.contains("missing-source") =>
+        {
+            value.missing_source_id.clone()
         }
         (FixtureCapability::Required(value), ComplianceCaseKind::NotFound, id)
             if id.contains("unavailable-endpoint") =>
@@ -1160,10 +1503,11 @@ fn video_clip_range(fixtures: &ComplianceFixtures) -> TimeRange {
 
 fn video_clip_request_range(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> TimeRange {
     match (&fixtures.videos, case.kind, case.id) {
-        (_, ComplianceCaseKind::Invalid, "videos.clip.reversed-range") => {
-            reversed_range(video_clip_range(fixtures))
-        }
-        (_, ComplianceCaseKind::Invalid, _) => over_limit_range(video_clip_range(fixtures)),
+        (
+            FixtureCapability::Required(value),
+            ComplianceCaseKind::Boundary,
+            "videos.clip.long-range",
+        ) => value.long_clip_range,
         (
             FixtureCapability::Required(value),
             ComplianceCaseKind::NotFound,
@@ -1176,22 +1520,19 @@ fn video_clip_request_range(case: &ComplianceCase, fixtures: &ComplianceFixtures
     }
 }
 
+fn follow_anchor_at(fixtures: &ComplianceFixtures) -> UtcTimestamp {
+    match &fixtures.videos {
+        FixtureCapability::Required(value) => value.follow_anchor_at,
+        FixtureCapability::Unavailable => fixtures.range.start(),
+    }
+}
+
 fn fallback_clip_range(range: TimeRange) -> TimeRange {
     TimeRange::new(
         range.start(),
         range.start().saturating_add_micros(1_000_000),
     )
     .expect("one-second clip range")
-}
-
-fn over_limit_range(range: TimeRange) -> TimeRange {
-    TimeRange::new(
-        range.start(),
-        range.start().saturating_add_micros(
-            i64::try_from(MAX_VIDEO_CLIP_DURATION_US + 1).unwrap_or(i64::MAX),
-        ),
-    )
-    .expect("over-limit clip range is still a valid time interval")
 }
 
 fn reversed_range(range: TimeRange) -> TimeRange {
@@ -1298,6 +1639,16 @@ impl ComplianceEndpoint for A2aEndpoint {
                     .get_video_clip(request)
                     .await
                     .map(A2aLabResult::GetVideoClip),
+                A2aLabCommand::GetVideoTimeline(request) => self
+                    .0
+                    .get_video_timeline(request)
+                    .await
+                    .map(A2aLabResult::GetVideoTimeline),
+                A2aLabCommand::FollowVideo(request) => self
+                    .0
+                    .follow_video(request)
+                    .await
+                    .map(A2aLabResult::FollowVideo),
             }
         })
     }

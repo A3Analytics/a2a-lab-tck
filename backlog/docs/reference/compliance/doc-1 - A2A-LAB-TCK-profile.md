@@ -10,30 +10,32 @@ created_date: '2026-10-09 20:05'
 
 The A2A-LAB TCK is the official A3 Analytics Technology Compatibility Kit for the A2A-LAB conformance profile. It is distinct from the upstream A2A protocol TCK: upstream protocol conformance is an input to A2A-LAB compatibility, while this TCK verifies lab operations and their cross-interface behavior.
 
-## Profile 1.2.0 suites
+## Profile 1.3.0 suites
 
-The current profile is `1.2.0`. Profile `1.1.0` remains the prior contract: its 47 operation-level case identifiers are unchanged, and its schema files stay published.
+The current profile is `1.3.0`. Profile `1.1.0` and profile `1.2.0` remain prior contracts: their published case identifiers and schema files stay available as historical artifacts rather than being silently rewritten.
 
-The `basic` suite contains those 47 cases plus 19 optional `videos` cases for `list_video_sources`, `get_video_frame_at`, and `get_video_clip`. Every required case exercises equivalent typed lab behavior over both A2A and MCP.
+The `basic` suite contains the inherited logs, metrics, tasks, and images cases plus optional `videos` cases for `list_video_sources`, `get_video_frame_at`, `get_video_clip`, `get_video_timeline`, and `follow_video` over both A2A and MCP. Every required case exercises equivalent typed lab behavior on both interfaces.
 
-The `full` suite is a strict superset. It contains all basic cases and four producer-to-consumer paths—A2A→A2A, MCP→MCP, A2A→MCP, and MCP→A2A—for each of logs, metrics, tasks, images, and videos. Those 20 linked scenarios test identifier handoff, successful availability, and task progress where applicable. Video paths hand off a video source identifier and observe JSON metadata only; clip bytes are not compared.
+The `full` suite is a strict superset. It contains all basic cases and four producer-to-consumer paths—A2A→A2A, MCP→MCP, A2A→MCP, and MCP→A2A—for each of logs, metrics, tasks, images, and videos. Video paths hand off a discovered video source identifier through all five video operations and compare JSON metadata only; clip bytes, playlists, credentials, and live frame bytes never enter compliance reports.
 
 A full run may also enable `a2a_agent_message`. Its `agent-message.a2a` evidence confirms advertisement, MCP task discovery, an A2A request grounded in the discovered task identifier, and a nonblank A2A context identifier. It does not prove a particular internal tool call, plan quality, general answer quality, or reliability on other prompts. Opting out omits the check and its scenario result; it does not report a skip.
 
 ## Fixtures and reports
 
-A fixture declaration selects profile `1.2.0`, a half-open time range, and deterministic identifiers for logs, metrics, tasks, images, and videos. Each capability is either `required` or `unavailable`. Required capabilities make their success, boundary, invalid, and not-found cases required while skipping unavailable cases. Unavailable capabilities require unavailable cases and skip the others.
+A fixture declaration selects profile `1.3.0`, a half-open time range, and deterministic identifiers for logs, metrics, tasks, images, and videos. Each capability is either `required` or `unavailable`. Required capabilities make their success, boundary, invalid, and not-found cases required while skipping unavailable cases. Unavailable capabilities require unavailable cases and skip the others.
 
-Videos is optional in the same way as logs, metrics, tasks, and images. Frame cases cover nearest, tie, and tolerance lookup plus empty coverage, outside retained coverage, and coverage gaps. Clip cases cover half-open bounds, reversed or over-limit ranges, empty coverage, outside retained coverage, coverage gaps, and an unavailable clip endpoint. Clip JSON is metadata-only.
+Videos is optional in the same way as logs, metrics, tasks, and images. Frame cases cover nearest lookup plus empty coverage, outside retained coverage, and coverage gaps. Clip cases cover half-open bounds, a successful long-range clip boundary, reversed ranges, empty ranges, empty coverage, outside retained coverage, coverage gaps, and an unavailable clip endpoint. Timeline cases cover populated ordered half-open coverage, empty retention, a missing source, and an unavailable provider. Live-follow cases cover live-edge success, anchored success, a missing source, `live_unavailable`, and an unavailable provider. Clip, timeline, and follow JSON are metadata-only and include codec plus optional 8x playback metadata where the dev kit exposes it.
+
+Profile `1.2.0` required rejection when a clip request exceeded 60 seconds. Profile `1.3.0` aligns with the current dev kit: long-range clips can succeed, and the invalid clip case is an empty half-open range instead of an over-limit range.
 
 Reports contain every stable case identifier exactly once. Required cases cover both A2A and MCP and cannot be skipped in a compliant report. Failed and skipped cases require diagnostics. Full reports also contain every enabled linked scenario with its exact producer-to-consumer handoff; enabling the LLM check requires `agent-message.a2a` evidence.
 
 The versioned machine-readable artifacts are:
 
-- `schemas/compliance-fixtures-1.2.0.json`
-- `schemas/compliance-result-1.2.0.json`
+- `schemas/compliance-fixtures-1.3.0.json`
+- `schemas/compliance-result-1.3.0.json`
 
-The result schema identifier is `https://a2a-lab.dev/schemas/compliance-result-1.2.0.json`. Prior `1.1.0` schema files remain.
+The result schema identifier is `https://a2a-lab.dev/schemas/compliance-result-1.3.0.json`. Prior `1.1.0` and `1.2.0` schema files remain.
 
 ## Intentional envelope differences
 
@@ -41,4 +43,4 @@ Parity compares shared lab values after removing protocol transport envelopes. A
 
 ## Boundaries
 
-The TCK verifies only the deterministic behavior represented by the selected suite and enabled checks. It does not establish certification, exhaustive application correctness, hardware correctness, model-provider quality, or upstream A2A protocol TCK status. Passing an A2A-LAB suite does not imply passing the upstream A2A TCK, and vice versa.
+The TCK verifies only the deterministic behavior represented by the selected suite and enabled checks. It does not establish certification, exhaustive application correctness, hardware correctness, model-provider quality, media gateway byte playback, or upstream A2A protocol TCK status. Passing an A2A-LAB suite does not imply passing the upstream A2A TCK, and vice versa.

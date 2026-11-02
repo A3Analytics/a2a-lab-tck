@@ -5,6 +5,11 @@ Source release: v0.1.0
 Source commit: 9d5327868d96b3e800fd89f6debf434bcc12709d
 Original author: Dylan Gustaveson <dylan@a3analytics.ai>
 
+Current dev-kit compatibility revision: 64ea97d3edcac8f51ba802dbed7fc4a595aec763
+This revision backs the standalone TCK integration matrix through the pinned
+`a2a-lab-dev-kit` crate. It is distinct from the historical extraction commit
+above and does not restore the removed embedded dev-kit compliance runner.
+
 Extracted source paths:
 - src/compliance.rs
 - tests/compliance_contract.rs
@@ -17,7 +22,7 @@ The contract was extracted into the standalone A3 Analytics A2A-LAB TCK
 without rewriting the target repository's template commit 7cbfe5d.
 
 Standalone release contract:
-- A2A-LAB profile: 1.1.0
+- A2A-LAB profile: 1.3.0
 - Inherited Action interface: devkit v0.1.0
 - Canonical Action repository: A3Analytics/a2a-lab-tck
 - First release provenance: the published Action must be selected by the full

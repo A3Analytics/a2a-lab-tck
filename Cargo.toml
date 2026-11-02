@@ -12,14 +12,20 @@ repository = "https://github.com/A3Analytics/a2a-lab-tck"
 publish = false
 
 [dependencies]
-# CI must retarget the git rev after the kit merge that includes video wire types
-# (TASK-72/73). Last published pin: rev = "928eae822318f650f8fe2f187e99091d4b46647b"
-a2a-lab-dev-kit = { path = "../a2a-lab-dev-kit-rs", default-features = false }
+a2a-lab-dev-kit = { git = "https://github.com/A3Analytics/a2a-lab-dev-kit-rs", rev = "64ea97d3edcac8f51ba802dbed7fc4a595aec763", default-features = false }
 schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time"] }
+
+[[bin]]
+name = "a2a-lab-compliance"
+path = "src/bin/a2a-lab-compliance.rs"
+
+[[bin]]
+name = "a2a-lab-compatibility-matrix"
+path = "src/bin/a2a-lab-compatibility-matrix.rs"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

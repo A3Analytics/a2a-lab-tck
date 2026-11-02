@@ -17,7 +17,7 @@ run = "cargo fmt --check"
 [check]
 description = "Type-check the workspace with warnings denied"
 env = { CARGO_TARGET_DIR = "{{config_root}}/../target/quality", RUSTFLAGS = "-D warnings" }
-run = "cargo check --workspace"
+run = "cargo check --workspace --all-targets"
 
 [clippy]
 description = "Lint all targets with warnings denied"
@@ -34,7 +34,7 @@ description = "Regenerate versioned JSON Schemas"
 run = "cargo run --quiet --example generate-schemas"
 
 [compatibility]
-description = "Compare standalone behavior with devkit v0.1.0"
+description = "Validate standalone TCK against pinned dev-kit integration endpoints"
 run = "bash .mise/scripts/compatibility.sh"
 
 [quality]

@@ -71,13 +71,23 @@ const CASE_IDS: &[&str] = &[
     "videos.frame.unavailable",
     "videos.clip.success",
     "videos.clip.half-open-range",
+    "videos.clip.long-range",
     "videos.clip.reversed-range",
-    "videos.clip.over-limit",
+    "videos.clip.empty-range",
     "videos.clip.empty-coverage",
     "videos.clip.outside-coverage",
     "videos.clip.gap",
     "videos.clip.unavailable-endpoint",
     "videos.clip.unavailable",
+    "videos.timeline.success",
+    "videos.timeline.empty-retention",
+    "videos.timeline.missing-source",
+    "videos.timeline.unavailable",
+    "videos.follow.live-edge",
+    "videos.follow.anchored",
+    "videos.follow.missing-source",
+    "videos.follow.live-unavailable",
+    "videos.follow.unavailable",
 ];
 
 const SCENARIO_IDS: &[&str] = &[
@@ -172,6 +182,16 @@ fn fixtures() -> ComplianceFixtures {
                 UtcTimestamp::parse("2026-01-01T12:00:01Z").unwrap(),
             )
             .unwrap(),
+            long_clip_range: TimeRange::new(
+                UtcTimestamp::parse("2026-01-01T00:00:00Z").unwrap(),
+                UtcTimestamp::parse("2026-01-01T00:01:01Z").unwrap(),
+            )
+            .unwrap(),
+            live_unavailable_source_id: a2a_lab_dev_kit::VideoSourceId::new(
+                "videos.sources.live-unavailable",
+            )
+            .unwrap(),
+            follow_anchor_at: UtcTimestamp::parse("2026-01-01T00:00:00Z").unwrap(),
         }),
     }
 }
@@ -227,7 +247,7 @@ fn result(suite: ComplianceSuite, agent_message: bool) -> ComplianceResult {
 
 #[test]
 fn published_profile_identifiers_and_composition_are_stable() {
-    assert_eq!(COMPLIANCE_PROFILE_VERSION, "1.2.0");
+    assert_eq!(COMPLIANCE_PROFILE_VERSION, "1.3.0");
     let basic = compliance_suite(ComplianceSuite::Basic);
     let full = compliance_suite(ComplianceSuite::Full);
     assert_eq!(
@@ -335,17 +355,46 @@ fn malformed_reports_return_field_level_diagnostics() {
 #[test]
 fn checked_in_schemas_match_generated_public_types() {
     let fixture_checked_in: serde_json::Value =
-        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.2.0.json")).unwrap();
+        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.3.0.json")).unwrap();
     let mut fixtures = schema_for!(ComplianceFixtures);
     fixtures.insert(
         "$id".to_owned(),
-        "https://a2a-lab.dev/schemas/compliance-fixtures-1.2.0.json".into(),
+        "https://a2a-lab.dev/schemas/compliance-fixtures-1.3.0.json".into(),
     );
     assert_eq!(fixture_checked_in, serde_json::to_value(fixtures).unwrap());
 
     let result_checked_in: serde_json::Value =
-        serde_json::from_str(include_str!("../schemas/compliance-result-1.2.0.json")).unwrap();
+        serde_json::from_str(include_str!("../schemas/compliance-result-1.3.0.json")).unwrap();
     let generated = serde_json::to_value(compliance_result_schema()).unwrap();
     assert_eq!(generated["$id"], COMPLIANCE_RESULT_SCHEMA_ID);
     assert_eq!(result_checked_in, generated);
+}
+
+#[test]
+fn prior_profile_schema_files_remain_unchanged() {
+    let fixtures_1_1_0: serde_json::Value =
+        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.1.0.json")).unwrap();
+    let result_1_1_0: serde_json::Value =
+        serde_json::from_str(include_str!("../schemas/compliance-result-1.1.0.json")).unwrap();
+    assert_eq!(
+        fixtures_1_1_0["$id"],
+        "https://a2a-lab.dev/schemas/compliance-fixtures-1.1.0.json"
+    );
+    assert_eq!(
+        result_1_1_0["$id"],
+        "https://a2a-lab.dev/schemas/compliance-result-1.1.0.json"
+    );
+
+    let fixtures_1_2_0: serde_json::Value =
+        serde_json::from_str(include_str!("../schemas/compliance-fixtures-1.2.0.json")).unwrap();
+    let result_1_2_0: serde_json::Value =
+        serde_json::from_str(include_str!("../schemas/compliance-result-1.2.0.json")).unwrap();
+    assert_eq!(
+        fixtures_1_2_0["$id"],
+        "https://a2a-lab.dev/schemas/compliance-fixtures-1.2.0.json"
+    );
+    assert_eq!(
+        result_1_2_0["$id"],
+        "https://a2a-lab.dev/schemas/compliance-result-1.2.0.json"
+    );
 }

@@ -6,7 +6,8 @@ use a2a_lab_dev_kit::{
     AgentMessageResponse, GetTaskStatusRequest, GetVideoFrameAtResult, Image, ImageDescriptor,
     ImageSource, JsonObject, LogSource, MJPEG_MEDIA_TYPE, McpServer, MemoryLogs, MemoryMetrics,
     MemoryTasks, MetricDescriptor, Page, RunId, TaskDefinition, TaskRun, TaskState, TimeRange,
-    UtcTimestamp, VideoClip, VideoSource, bind_local,
+    UtcTimestamp, VideoClip, VideoCodec, VideoFollow, VideoPlayback8xMetadata, VideoSource,
+    VideoTimeline, bind_local,
 };
 use a2a_lab_tck::{
     COMPLIANCE_PROFILE_VERSION, ComplianceCheck, ComplianceEndpoint, ComplianceFixtures,
@@ -73,6 +74,13 @@ fn fixtures() -> ComplianceFixtures {
                 timestamp("2026-01-01T12:00:01Z"),
             )
             .unwrap(),
+            long_clip_range: TimeRange::new(
+                timestamp("2026-01-01T00:00:00Z"),
+                timestamp("2026-01-01T00:01:01Z"),
+            )
+            .unwrap(),
+            live_unavailable_source_id: id("videos.sources.live-unavailable"),
+            follow_anchor_at: timestamp("2026-01-01T00:00:00Z"),
         }),
     }
 }
@@ -229,7 +237,7 @@ async fn unavailable_capabilities_skip_only_nonrequired_cases() {
         .unwrap();
 
     assert!(result.compliant);
-    assert_eq!(result.cases.iter().filter(|case| case.required).count(), 15);
+    assert_eq!(result.cases.iter().filter(|case| case.required).count(), 17);
     assert!(result.cases.iter().all(|case| {
         if case.required {
             case.outcome == ComplianceOutcome::Pass
@@ -237,6 +245,51 @@ async fn unavailable_capabilities_skip_only_nonrequired_cases() {
             case.outcome == ComplianceOutcome::Skip
         }
     }));
+}
+
+#[tokio::test]
+async fn malformed_video_cases_use_the_typed_seam_on_both_interfaces() {
+    let a2a_commands = Arc::new(Mutex::new(Vec::new()));
+    let mcp_commands = Arc::new(Mutex::new(Vec::new()));
+    let result = runner(
+        Arc::new(RecordingEndpoint(Arc::clone(&a2a_commands))),
+        Arc::new(RecordingEndpoint(Arc::clone(&mcp_commands))),
+        fixtures(),
+    )
+    .run()
+    .await
+    .unwrap();
+
+    for case_id in [
+        "videos.sources.invalid-limit",
+        "videos.clip.reversed-range",
+        "videos.clip.empty-range",
+    ] {
+        let case = result
+            .cases
+            .iter()
+            .find(|case| case.case_id == case_id)
+            .unwrap();
+        assert_eq!(case.outcome, ComplianceOutcome::Pass, "{case_id}");
+    }
+
+    for commands in [&a2a_commands, &mcp_commands] {
+        let commands = commands.lock().unwrap();
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            A2aLabCommand::ListVideoSources(request) if request.page().limit() == 0
+        )));
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            A2aLabCommand::GetVideoClip(request)
+                if request.range().start().as_micros() > request.range().end().as_micros()
+        )));
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            A2aLabCommand::GetVideoClip(request)
+                if request.range().start() == request.range().end()
+        )));
+    }
 }
 
 #[tokio::test]
@@ -394,6 +447,8 @@ async fn full_runs_basic_cases_and_all_non_llm_linked_scenarios() {
     assert!(has_task_status(&mcp, "runs.started"));
     assert!(has_get_image(&a2a, "images.discovered"));
     assert!(has_get_video_clip(&mcp, "videos.sources.discovered"));
+    assert!(has_get_video_timeline(&mcp, "videos.sources.discovered"));
+    assert!(has_follow_video(&mcp, "videos.sources.discovered"));
 }
 
 #[tokio::test]
@@ -1028,7 +1083,9 @@ fn fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabError> {
         | A2aLabCommand::GetCurrentImage(_)) => image_fixture_result(command),
         command @ (A2aLabCommand::ListVideoSources(_)
         | A2aLabCommand::GetVideoFrameAt(_)
-        | A2aLabCommand::GetVideoClip(_)) => video_fixture_result(command),
+        | A2aLabCommand::GetVideoClip(_)
+        | A2aLabCommand::GetVideoTimeline(_)
+        | A2aLabCommand::FollowVideo(_)) => video_fixture_result(command),
     }
 }
 
@@ -1111,19 +1168,99 @@ fn video_fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabEr
         A2aLabCommand::GetVideoClip(request) => {
             request.check()?;
             video_clip_missing(request.source_id().as_str(), request.range())?;
-            Ok(A2aLabResult::GetVideoClip(
-                VideoClip::new(
-                    id("videos.clips.primary"),
-                    request.source_id().clone(),
-                    request.range(),
-                    request.range(),
-                    MJPEG_MEDIA_TYPE,
-                )
-                .unwrap(),
-            ))
+            let clip = VideoClip::new(
+                id("videos.clips.primary"),
+                request.source_id().clone(),
+                request.range(),
+                request.range(),
+                VideoCodec::Mjpeg,
+                MJPEG_MEDIA_TYPE,
+            )
+            .unwrap();
+            Ok(A2aLabResult::GetVideoClip(clip_with_playback_8x(
+                clip,
+                request.source_id().as_str(),
+                request.range(),
+            )))
+        }
+        A2aLabCommand::GetVideoTimeline(request) => {
+            video_timeline_missing(request.source_id().as_str())?;
+            Ok(A2aLabResult::GetVideoTimeline(video_timeline(
+                request.source_id().as_str(),
+            )?))
+        }
+        A2aLabCommand::FollowVideo(request) => {
+            video_follow_missing(request.source_id().as_str())?;
+            Ok(A2aLabResult::FollowVideo(follow_with_playback_8x(
+                request.source_id().as_str(),
+                request.anchor_at(),
+            )?))
         }
         _ => unreachable!("video fixture helper received a non-video command"),
     }
+}
+
+fn video_timeline(source_id: &str) -> Result<VideoTimeline, A2aLabError> {
+    let source = id(source_id);
+    if source_id.contains("empty") {
+        return VideoTimeline::new(source, Vec::new(), None, false);
+    }
+    let first = TimeRange::new(
+        timestamp("2026-01-01T00:00:00Z"),
+        timestamp("2026-01-01T00:00:01Z"),
+    )
+    .unwrap();
+    let second = TimeRange::new(
+        timestamp("2026-01-01T01:00:00Z"),
+        timestamp("2026-01-01T01:00:01Z"),
+    )
+    .unwrap();
+    VideoTimeline::new(source, vec![first, second], Some(second.start()), true)
+}
+
+fn clip_with_playback_8x(clip: VideoClip, source_id: &str, range: TimeRange) -> VideoClip {
+    if source_id == "videos.sources.primary"
+        && range.start() == timestamp("2026-01-01T00:00:00Z")
+        && range.end() == timestamp("2026-01-01T00:00:01Z")
+    {
+        clip.with_playback_8x(VideoPlayback8xMetadata::available(
+            "sessions/primary/8x.m3u8",
+            "sessions/primary/index.m3u8",
+        ))
+    } else {
+        clip
+    }
+}
+
+fn follow_with_playback_8x(
+    source_id: &str,
+    anchor_at: Option<UtcTimestamp>,
+) -> Result<VideoFollow, A2aLabError> {
+    let follow = VideoFollow::new_mjpeg(id("videos.follow.primary"), id(source_id))?;
+    if source_id == "videos.sources.primary" && anchor_at.is_none() {
+        Ok(
+            follow.with_playback_8x(VideoPlayback8xMetadata::unavailable(
+                "sessions/primary/live.m3u8",
+                "trick_play_unavailable",
+            )),
+        )
+    } else {
+        Ok(follow)
+    }
+}
+
+fn video_timeline_missing(source_id: &str) -> Result<(), A2aLabError> {
+    missing(source_id)
+}
+
+fn video_follow_missing(source_id: &str) -> Result<(), A2aLabError> {
+    missing(source_id)?;
+    if source_id.contains("live-unavailable") {
+        return Err(A2aLabError::live_unavailable(
+            "fixture live follow unavailable",
+        ));
+    }
+    Ok(())
 }
 
 fn video_source(source_id: &str) -> VideoSource {
@@ -1302,6 +1439,24 @@ fn has_get_video_clip(commands: &[A2aLabCommand], expected: &str) -> bool {
         matches!(
             command,
             A2aLabCommand::GetVideoClip(request) if request.source_id().as_str() == expected
+        )
+    })
+}
+
+fn has_get_video_timeline(commands: &[A2aLabCommand], expected: &str) -> bool {
+    commands.iter().any(|command| {
+        matches!(
+            command,
+            A2aLabCommand::GetVideoTimeline(request) if request.source_id().as_str() == expected
+        )
+    })
+}
+
+fn has_follow_video(commands: &[A2aLabCommand], expected: &str) -> bool {
+    commands.iter().any(|command| {
+        matches!(
+            command,
+            A2aLabCommand::FollowVideo(request) if request.source_id().as_str() == expected
         )
     })
 }

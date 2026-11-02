@@ -2,15 +2,17 @@
 //!
 //! This crate is distinct from the upstream A2A protocol TCK.
 
+pub mod compatibility;
 pub mod compliance;
 mod compliance_runner;
 
 pub use compliance::{
-    COMPLIANCE_PROFILE_VERSION, COMPLIANCE_RESULT_SCHEMA_ID, ComplianceCase, ComplianceCaseKind,
-    ComplianceCaseResult, ComplianceCheck, ComplianceFixtures, ComplianceInterface,
-    ComplianceOperation, ComplianceOutcome, ComplianceProfile, ComplianceResult,
-    ComplianceScenario, ComplianceScenarioAssertion, ComplianceScenarioCapability,
-    ComplianceScenarioResult, ComplianceSuite, ComplianceSuiteContract, ComplianceValidationError,
+    COMPLIANCE_PROFILE_VERSION, COMPLIANCE_PROFILE_VERSION_1_1_0, COMPLIANCE_PROFILE_VERSION_1_2_0,
+    COMPLIANCE_RESULT_SCHEMA_ID, ComplianceCase, ComplianceCaseKind, ComplianceCaseResult,
+    ComplianceCheck, ComplianceFixtures, ComplianceInterface, ComplianceOperation,
+    ComplianceOutcome, ComplianceProfile, ComplianceResult, ComplianceScenario,
+    ComplianceScenarioAssertion, ComplianceScenarioCapability, ComplianceScenarioResult,
+    ComplianceSuite, ComplianceSuiteContract, ComplianceValidationError,
     ComplianceValidationErrors, FixtureCapability, ImageFixtures, ImplementationIdentity,
     LogFixtures, MetricFixtures, OperationContract, TaskFixtures, VideoFixtures,
     cases_by_operation, compliance_profile, compliance_result_schema, compliance_suite,

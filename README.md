@@ -11,7 +11,7 @@ imply passing the other.
 
 ## GitHub Action
 
-The repository-root composite Action runs profile 1.2.0 against deterministic
+The repository-root composite Action runs profile 1.3.0 against deterministic
 A2A and MCP endpoints started by the consumer. It inherits the published
 devkit v0.1.0 Action contract:
 
@@ -68,7 +68,7 @@ under `backlog/docs/`; do not add loose Markdown documentation.
 
 ## Release provenance
 
-The current profile is 1.2.0. Profile 1.1.0 remains the prior contract. The first
+The current profile is 1.3.0. Profiles 1.1.0 and 1.2.0 remain prior contracts. The first
 standalone release carried profile 1.1.0 and the inherited devkit
 v0.1.0 Action interface. `PROVENANCE` records the source release and immutable
 source revision. Preparing and validating these assets does not authorize a

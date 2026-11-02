@@ -11,11 +11,15 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::{Deserialize, Serialize};
 
 /// Current reusable A2A-LAB compliance profile.
-pub const COMPLIANCE_PROFILE_VERSION: &str = "1.2.0";
+pub const COMPLIANCE_PROFILE_VERSION: &str = "1.3.0";
+
+/// Prior profile contracts preserved as published artifacts.
+pub const COMPLIANCE_PROFILE_VERSION_1_1_0: &str = "1.1.0";
+pub const COMPLIANCE_PROFILE_VERSION_1_2_0: &str = "1.2.0";
 
 /// Stable identifier of the JSON result schema.
 pub const COMPLIANCE_RESULT_SCHEMA_ID: &str =
-    "https://a2a-lab.dev/schemas/compliance-result-1.2.0.json";
+    "https://a2a-lab.dev/schemas/compliance-result-1.3.0.json";
 
 #[derive(
     Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
@@ -66,6 +70,8 @@ pub enum ComplianceOperation {
     ListVideoSources,
     GetVideoFrameAt,
     GetVideoClip,
+    GetVideoTimeline,
+    FollowVideo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -131,6 +137,8 @@ pub struct OperationContract {
     pub operation: ComplianceOperation,
     pub interfaces: &'static [ComplianceInterface],
     pub observable_fields: &'static [&'static str],
+    /// Present on success when advertised; omitted for legacy MJPEG sessions.
+    pub optional_observable_fields: &'static [&'static str],
     pub unavailable_error_code: &'static str,
 }
 
@@ -182,9 +190,13 @@ const VIDEO_CLIP_FIELDS: &[&str] = &[
     "source_id",
     "requested_range",
     "effective_range",
+    "codec",
     "media_type",
     "path",
 ];
+const VIDEO_TIMELINE_FIELDS: &[&str] = &["source_id", "intervals", "newest_at", "live_available"];
+const VIDEO_FOLLOW_FIELDS: &[&str] = &["id", "source_id", "codec", "media_type", "path"];
+const VIDEO_PLAYBACK_8X_FIELD: &[&str] = &["playback_8x"];
 
 const fn operation(
     operation: ComplianceOperation,
@@ -194,6 +206,27 @@ const fn operation(
         operation,
         interfaces: BOTH,
         observable_fields,
+        optional_observable_fields: &[],
+        unavailable_error_code: "unavailable",
+    }
+}
+
+const fn video_clip_operation() -> OperationContract {
+    OperationContract {
+        operation: ComplianceOperation::GetVideoClip,
+        interfaces: BOTH,
+        observable_fields: VIDEO_CLIP_FIELDS,
+        optional_observable_fields: VIDEO_PLAYBACK_8X_FIELD,
+        unavailable_error_code: "unavailable",
+    }
+}
+
+const fn video_follow_operation() -> OperationContract {
+    OperationContract {
+        operation: ComplianceOperation::FollowVideo,
+        interfaces: BOTH,
+        observable_fields: VIDEO_FOLLOW_FIELDS,
+        optional_observable_fields: VIDEO_PLAYBACK_8X_FIELD,
         unavailable_error_code: "unavailable",
     }
 }
@@ -213,7 +246,9 @@ const OPERATIONS: &[OperationContract] = &[
     operation(ComplianceOperation::GetCurrentImage, IMAGE_FIELDS),
     operation(ComplianceOperation::ListVideoSources, PAGE_FIELDS),
     operation(ComplianceOperation::GetVideoFrameAt, VIDEO_FRAME_FIELDS),
-    operation(ComplianceOperation::GetVideoClip, VIDEO_CLIP_FIELDS),
+    video_clip_operation(),
+    operation(ComplianceOperation::GetVideoTimeline, VIDEO_TIMELINE_FIELDS),
+    video_follow_operation(),
 ];
 
 const INTENTIONAL_ENVELOPE_DIFFERENCES: &[&str] = &[
@@ -293,13 +328,23 @@ const CASES: &[ComplianceCase] = cases![
     ("videos.frame.unavailable", GetVideoFrameAt, Unavailable),
     ("videos.clip.success", GetVideoClip, Success),
     ("videos.clip.half-open-range", GetVideoClip, Boundary),
+    ("videos.clip.long-range", GetVideoClip, Boundary),
     ("videos.clip.reversed-range", GetVideoClip, Invalid),
-    ("videos.clip.over-limit", GetVideoClip, Invalid),
+    ("videos.clip.empty-range", GetVideoClip, Invalid),
     ("videos.clip.empty-coverage", GetVideoClip, NotFound),
     ("videos.clip.outside-coverage", GetVideoClip, NotFound),
     ("videos.clip.gap", GetVideoClip, NotFound),
     ("videos.clip.unavailable-endpoint", GetVideoClip, NotFound),
     ("videos.clip.unavailable", GetVideoClip, Unavailable),
+    ("videos.timeline.success", GetVideoTimeline, Success),
+    ("videos.timeline.empty-retention", GetVideoTimeline, Success),
+    ("videos.timeline.missing-source", GetVideoTimeline, NotFound),
+    ("videos.timeline.unavailable", GetVideoTimeline, Unavailable),
+    ("videos.follow.live-edge", FollowVideo, Success),
+    ("videos.follow.anchored", FollowVideo, Success),
+    ("videos.follow.missing-source", FollowVideo, NotFound),
+    ("videos.follow.live-unavailable", FollowVideo, Invalid),
+    ("videos.follow.unavailable", FollowVideo, Unavailable),
 ];
 
 const LINK_ASSERTIONS: &[ComplianceScenarioAssertion] = &[
@@ -324,7 +369,13 @@ const IMAGE_STEPS: &[&str] = &[
     "get_image",
     "get_current_image",
 ];
-const VIDEO_STEPS: &[&str] = &["list_video_sources", "get_video_frame_at", "get_video_clip"];
+const VIDEO_STEPS: &[&str] = &[
+    "list_video_sources",
+    "get_video_frame_at",
+    "get_video_clip",
+    "get_video_timeline",
+    "follow_video",
+];
 const AGENT_STEPS: &[&str] = &["a2a_agent_message"];
 
 macro_rules! scenario {
@@ -582,6 +633,9 @@ pub struct VideoFixtures {
     pub clip_range: TimeRange,
     pub outside_range: TimeRange,
     pub gap_range: TimeRange,
+    pub long_clip_range: TimeRange,
+    pub live_unavailable_source_id: VideoSourceId,
+    pub follow_anchor_at: UtcTimestamp,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -669,6 +723,7 @@ impl ComplianceFixtures {
                     &value.alternate_source_id,
                     &value.missing_source_id,
                     &value.empty_source_id,
+                    &value.live_unavailable_source_id,
                 ],
                 &mut errors,
             );
@@ -676,6 +731,7 @@ impl ComplianceFixtures {
                 ("videos.clip_range", value.clip_range),
                 ("videos.outside_range", value.outside_range),
                 ("videos.gap_range", value.gap_range),
+                ("videos.long_clip_range", value.long_clip_range),
             ] {
                 if let Err(error) = range.check() {
                     errors.push(field_error(field, error));
