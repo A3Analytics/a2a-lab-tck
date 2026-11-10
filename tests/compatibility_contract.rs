@@ -100,3 +100,38 @@ fn devkit_revision_constant_matches_manifest() {
     let manifest = include_str!("../Cargo.toml");
     assert!(manifest.contains(DEVKIT_REVISION));
 }
+
+#[cfg(feature = "semantic-contracts")]
+#[test]
+fn additive_semantic_schema_artifacts_are_present() {
+    for file in [
+        "saved-frame-ref-1.0.0.json",
+        "search-semantic-frames-request-1.0.0.json",
+        "semantic-indexing-coverage-1.0.0.json",
+        "frame-decision-record-1.0.0.json",
+        "a2a-lab-config-v2-semantic-example.json",
+    ] {
+        let path = format!("schemas/{file}");
+        let raw = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+            panic!("missing additive schema artifact {path}; run `mise run schemas`")
+        });
+        let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        if file != "a2a-lab-config-v2-semantic-example.json" {
+            assert!(
+                value.get("title").is_some() || value.get("properties").is_some(),
+                "{file} must be a JSON Schema"
+            );
+        }
+        assert_eq!(value["$id"], format!("https://a2a-lab.dev/schemas/{file}"));
+    }
+}
+
+#[cfg(feature = "semantic-contracts")]
+#[test]
+fn pinned_devkit_exposes_semantic_transport_schema_refs() {
+    use a2a_lab_dev_kit::{FrameDecisionSchemaRefs, SemanticSearchSchemaRefs};
+    let search = SemanticSearchSchemaRefs::registered();
+    assert_eq!(search.search_result(), "SemanticFrameSearchResult");
+    let decisions = FrameDecisionSchemaRefs::registered();
+    assert_eq!(decisions.append_result(), "AppendFrameDecisionResult");
+}

@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "EmbeddingMetric": {
+      "description": "Similarity metric for a vector index space.",
+      "oneOf": [
+        {
+          "const": "cosine",
+          "description": "Cosine similarity.",
+          "type": "string"
+        },
+        {
+          "const": "dot",
+          "description": "Inner product on normalized vectors.",
+          "type": "string"
+        },
+        {
+          "const": "euclidean",
+          "description": "Euclidean distance.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelSpaceIdentity": {
+      "description": "Identity of one compatible text-embedding index namespace.",
+      "properties": {
+        "dimensions": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "$ref": "#/$defs/ProvenanceGeneration"
+        },
+        "metric": {
+          "$ref": "#/$defs/EmbeddingMetric"
+        },
+        "model": {
+          "type": "string"
+        },
+        "normalization": {
+          "$ref": "#/$defs/VectorNormalization"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "dimensions",
+        "normalization",
+        "metric",
+        "generation"
+      ],
+      "type": "object"
+    },
+    "ProvenanceGeneration": {
+      "description": "Non-zero provenance generation for description or embedding pipelines.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SemanticIndexingFreshness": {
+      "description": "Capture-time boundaries describing indexing freshness.",
+      "properties": {
+        "newest_failed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "newest_ready": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oldest_pending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "SemanticIndexingStateCounts": {
+      "description": "Per-state counts inside a scoped coverage report.",
+      "properties": {
+        "expired": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ready": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pending",
+        "ready",
+        "failed",
+        "expired"
+      ],
+      "type": "object"
+    },
+    "SemanticSearchScope": {
+      "description": "Finite retained source and half-open UTC scope for one search.",
+      "properties": {
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_id": {
+          "$ref": "#/$defs/VideoSourceId"
+        }
+      },
+      "required": [
+        "source_id",
+        "range"
+      ],
+      "type": "object"
+    },
+    "TimeRange": {
+      "description": "A half-open UTC interval `[start, end)`.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "start": {
+          "$ref": "#/$defs/UtcTimestamp"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "VectorNormalization": {
+      "description": "Vector normalization applied before indexing.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Values are stored without normalization.",
+          "type": "string"
+        },
+        {
+          "const": "l2_unit",
+          "description": "L2 unit normalization.",
+          "type": "string"
+        }
+      ]
+    },
+    "VideoSourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/semantic-indexing-coverage-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Scoped semantic indexing coverage for search readiness.",
+  "properties": {
+    "counts": {
+      "$ref": "#/$defs/SemanticIndexingStateCounts"
+    },
+    "freshness": {
+      "$ref": "#/$defs/SemanticIndexingFreshness"
+    },
+    "model_space": {
+      "$ref": "#/$defs/ModelSpaceIdentity"
+    },
+    "scope": {
+      "$ref": "#/$defs/SemanticSearchScope"
+    },
+    "scope_complete": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "scope",
+    "model_space",
+    "counts",
+    "freshness",
+    "scope_complete"
+  ],
+  "title": "SemanticIndexingCoverage",
+  "type": "object"
+}

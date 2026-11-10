@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "FrameRoiTransform": {
+      "description": "Normalized ROI `[x_min, y_min, x_max, y_max]` on the oriented saved frame.",
+      "properties": {
+        "bounds": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "bounds"
+      ],
+      "type": "object"
+    },
+    "ProvenanceGeneration": {
+      "description": "Non-zero provenance generation for description or embedding pipelines.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/frame-description-provenance-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Luna (or configured) frame description provenance.",
+  "properties": {
+    "frame_roi": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FrameRoiTransform"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generation": {
+      "$ref": "#/$defs/ProvenanceGeneration"
+    },
+    "preprocessing_digest": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "prompt_digest": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "resolved_model": {
+      "type": "string"
+    },
+    "text_hash": {
+      "$ref": "#/$defs/Sha256Digest"
+    }
+  },
+  "required": [
+    "provider",
+    "resolved_model",
+    "prompt_digest",
+    "preprocessing_digest",
+    "text_hash",
+    "generation"
+  ],
+  "title": "FrameDescriptionProvenance",
+  "type": "object"
+}

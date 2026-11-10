@@ -1,0 +1,492 @@
+{
+  "$defs": {
+    "CaptureGroupId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DecisionHistoryPolicy": {
+      "description": "How decision history is reduced before semantic ranking completes.",
+      "oneOf": [
+        {
+          "const": "latest_authorized_production",
+          "description": "Latest authorized Jev production decision per predicate and subject.",
+          "type": "string"
+        },
+        {
+          "const": "latest_per_predicate_subject",
+          "description": "Latest record per predicate and subject across all producers.",
+          "type": "string"
+        },
+        {
+          "const": "full_history",
+          "description": "All matching history rows; may truncate when candidate budget is exhausted.",
+          "type": "string"
+        }
+      ]
+    },
+    "DecisionSubject": {
+      "description": "Predicate subject required for evaluation and filtering.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PipetteChannelSubject",
+          "description": "Pipetter channel for tip attachment.",
+          "properties": {
+            "kind": {
+              "const": "pipette_channel",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/ForeignObjectSubject",
+          "description": "Deck region for foreign object evidence.",
+          "properties": {
+            "kind": {
+              "const": "foreign_object",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/PlateSlotSubject",
+          "description": "Plate and deck slot for misalignment.",
+          "properties": {
+            "kind": {
+              "const": "plate_slot",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DecisionUnknownReason": {
+      "description": "Why a predicate could not be resolved to present or absent.",
+      "oneOf": [
+        {
+          "const": "occlusion",
+          "description": "Target occluded from view.",
+          "type": "string"
+        },
+        {
+          "const": "out_of_view",
+          "description": "Subject outside the observable region.",
+          "type": "string"
+        },
+        {
+          "const": "missing_reference",
+          "description": "Required alignment or scene reference missing.",
+          "type": "string"
+        },
+        {
+          "const": "unavailable_calibration",
+          "description": "Pose/alignment calibration unavailable.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain_expectation",
+          "description": "Configured expectation too uncertain to decide.",
+          "type": "string"
+        },
+        {
+          "const": "indeterminate_evidence",
+          "description": "Evidence quality prevents a defensible call.",
+          "type": "string"
+        }
+      ]
+    },
+    "DvrStoreNamespace": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DvrTrackId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ForeignObjectSubject": {
+      "description": "Bench/deck region for foreign-object inspection.",
+      "properties": {
+        "deck_region": {
+          "type": "string"
+        },
+        "evidence_roi": {
+          "$ref": "#/$defs/FrameRoiTransform"
+        },
+        "expected_scene_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unknown_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionUnknownReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "deck_region",
+        "evidence_roi"
+      ],
+      "type": "object"
+    },
+    "FrameDecisionReadLimits": {
+      "description": "Read budgets for history queries.",
+      "properties": {
+        "max_rows": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_rows"
+      ],
+      "type": "object"
+    },
+    "FrameDecisionReadScope": {
+      "description": "Half-open source/time scope with an optional exact frame revision pin.",
+      "properties": {
+        "frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SavedFrameRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "$ref": "#/$defs/TimeRange"
+        },
+        "source_id": {
+          "$ref": "#/$defs/VideoSourceId"
+        }
+      },
+      "required": [
+        "source_id",
+        "range"
+      ],
+      "type": "object"
+    },
+    "FrameRoiTransform": {
+      "description": "Normalized ROI `[x_min, y_min, x_max, y_max]` on the oriented saved frame.",
+      "properties": {
+        "bounds": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "bounds"
+      ],
+      "type": "object"
+    },
+    "JevProducerIdentity": {
+      "description": "Authorized TypeSafe Jev producer identity.",
+      "properties": {
+        "model_revision": {
+          "type": "string"
+        },
+        "producer_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "producer_id",
+        "model_revision"
+      ],
+      "type": "object"
+    },
+    "LabPredicate": {
+      "description": "Supported lab predicate identifier and version.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PageRequest": {
+      "description": "A page request using an opaque cursor.",
+      "properties": {
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": 100,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "PipetteChannelSubject": {
+      "description": "Pipetter channel within a mount.",
+      "properties": {
+        "channel": {
+          "type": "string"
+        },
+        "pipetter_id": {
+          "type": "string"
+        },
+        "tip_evidence_roi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameRoiTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "pipetter_id",
+        "channel"
+      ],
+      "type": "object"
+    },
+    "PlateAlignmentReference": {
+      "description": "Alignment reference for plate misalignment assessment.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Expected pose digest from operator configuration.",
+          "properties": {
+            "expected_pose_digest": {
+              "$ref": "#/$defs/Sha256Digest"
+            }
+          },
+          "required": [
+            "expected_pose_digest"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Recorded reason when no reference is available.",
+          "properties": {
+            "unknown": {
+              "$ref": "#/$defs/DecisionUnknownReason"
+            }
+          },
+          "required": [
+            "unknown"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PlateSlotSubject": {
+      "description": "Plate deck-slot subject for misalignment predicates.",
+      "properties": {
+        "alignment_reference": {
+          "$ref": "#/$defs/PlateAlignmentReference"
+        },
+        "deck_slot": {
+          "type": "string"
+        },
+        "inspection_roi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameRoiTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plate_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plate_id",
+        "deck_slot",
+        "alignment_reference"
+      ],
+      "type": "object"
+    },
+    "SavedFrameId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "SavedFrameRef": {
+      "description": "Reference to one committed saved media revision.\n\nThe [`SavedFrameRef::frame_id`] binds store identity, source, track epoch,\noriginal capture instant, and payload bytes. Payload replacement at the same\nDVR key produces a different revision and cannot inherit prior decisions.",
+      "properties": {
+        "capture_group": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureGroupId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "captured_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/SavedFrameId"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "source_id": {
+          "$ref": "#/$defs/VideoSourceId"
+        },
+        "store": {
+          "$ref": "#/$defs/DvrStoreNamespace"
+        },
+        "track_id": {
+          "$ref": "#/$defs/DvrTrackId"
+        }
+      },
+      "required": [
+        "frame_id",
+        "store",
+        "source_id",
+        "track_id",
+        "captured_at",
+        "payload_digest"
+      ],
+      "type": "object"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "TimeRange": {
+      "description": "A half-open UTC interval `[start, end)`.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "start": {
+          "$ref": "#/$defs/UtcTimestamp"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "VideoSourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/read-frame-decision-history-request-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Bounded history read request.",
+  "properties": {
+    "history_policy": {
+      "$ref": "#/$defs/DecisionHistoryPolicy"
+    },
+    "limits": {
+      "$ref": "#/$defs/FrameDecisionReadLimits"
+    },
+    "page": {
+      "$ref": "#/$defs/PageRequest"
+    },
+    "predicate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LabPredicate"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "producer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JevProducerIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "report_unavailable_evidence": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "scope": {
+      "$ref": "#/$defs/FrameDecisionReadScope"
+    },
+    "subject": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DecisionSubject"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "scope",
+    "history_policy",
+    "limits",
+    "page"
+  ],
+  "title": "ReadFrameDecisionHistoryRequest",
+  "type": "object"
+}

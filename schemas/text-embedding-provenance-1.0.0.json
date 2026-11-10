@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "EmbeddingMetric": {
+      "description": "Similarity metric for a vector index space.",
+      "oneOf": [
+        {
+          "const": "cosine",
+          "description": "Cosine similarity.",
+          "type": "string"
+        },
+        {
+          "const": "dot",
+          "description": "Inner product on normalized vectors.",
+          "type": "string"
+        },
+        {
+          "const": "euclidean",
+          "description": "Euclidean distance.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProvenanceGeneration": {
+      "description": "Non-zero provenance generation for description or embedding pipelines.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "VectorNormalization": {
+      "description": "Vector normalization applied before indexing.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Values are stored without normalization.",
+          "type": "string"
+        },
+        {
+          "const": "l2_unit",
+          "description": "L2 unit normalization.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/text-embedding-provenance-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Text-embedding provenance independent from description generation.",
+  "properties": {
+    "dimensions": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "generation": {
+      "$ref": "#/$defs/ProvenanceGeneration"
+    },
+    "metric": {
+      "$ref": "#/$defs/EmbeddingMetric"
+    },
+    "model": {
+      "type": "string"
+    },
+    "normalization": {
+      "$ref": "#/$defs/VectorNormalization"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "source_text_hash": {
+      "$ref": "#/$defs/Sha256Digest"
+    }
+  },
+  "required": [
+    "provider",
+    "model",
+    "dimensions",
+    "normalization",
+    "metric",
+    "generation",
+    "source_text_hash"
+  ],
+  "title": "TextEmbeddingProvenance",
+  "type": "object"
+}

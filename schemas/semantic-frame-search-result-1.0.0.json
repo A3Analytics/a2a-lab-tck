@@ -1,0 +1,415 @@
+{
+  "$defs": {
+    "CaptureGroupId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DvrStoreNamespace": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DvrTrackId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "EmbeddingMetric": {
+      "description": "Similarity metric for a vector index space.",
+      "oneOf": [
+        {
+          "const": "cosine",
+          "description": "Cosine similarity.",
+          "type": "string"
+        },
+        {
+          "const": "dot",
+          "description": "Inner product on normalized vectors.",
+          "type": "string"
+        },
+        {
+          "const": "euclidean",
+          "description": "Euclidean distance.",
+          "type": "string"
+        }
+      ]
+    },
+    "FrameDescriptionProvenance": {
+      "description": "Luna (or configured) frame description provenance.",
+      "properties": {
+        "frame_roi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameRoiTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "$ref": "#/$defs/ProvenanceGeneration"
+        },
+        "preprocessing_digest": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "prompt_digest": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "resolved_model": {
+          "type": "string"
+        },
+        "text_hash": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "provider",
+        "resolved_model",
+        "prompt_digest",
+        "preprocessing_digest",
+        "text_hash",
+        "generation"
+      ],
+      "type": "object"
+    },
+    "FrameRoiTransform": {
+      "description": "Normalized ROI `[x_min, y_min, x_max, y_max]` on the oriented saved frame.",
+      "properties": {
+        "bounds": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "bounds"
+      ],
+      "type": "object"
+    },
+    "ModelSpaceIdentity": {
+      "description": "Identity of one compatible text-embedding index namespace.",
+      "properties": {
+        "dimensions": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "$ref": "#/$defs/ProvenanceGeneration"
+        },
+        "metric": {
+          "$ref": "#/$defs/EmbeddingMetric"
+        },
+        "model": {
+          "type": "string"
+        },
+        "normalization": {
+          "$ref": "#/$defs/VectorNormalization"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "dimensions",
+        "normalization",
+        "metric",
+        "generation"
+      ],
+      "type": "object"
+    },
+    "Page": {
+      "description": "One page of results.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SemanticFrameHit"
+          },
+          "type": "array"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "ProvenanceGeneration": {
+      "description": "Non-zero provenance generation for description or embedding pipelines.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SavedFrameId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "SavedFrameRef": {
+      "description": "Reference to one committed saved media revision.\n\nThe [`SavedFrameRef::frame_id`] binds store identity, source, track epoch,\noriginal capture instant, and payload bytes. Payload replacement at the same\nDVR key produces a different revision and cannot inherit prior decisions.",
+      "properties": {
+        "capture_group": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureGroupId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "captured_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/SavedFrameId"
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/Sha256Digest"
+        },
+        "source_id": {
+          "$ref": "#/$defs/VideoSourceId"
+        },
+        "store": {
+          "$ref": "#/$defs/DvrStoreNamespace"
+        },
+        "track_id": {
+          "$ref": "#/$defs/DvrTrackId"
+        }
+      },
+      "required": [
+        "frame_id",
+        "store",
+        "source_id",
+        "track_id",
+        "captured_at",
+        "payload_digest"
+      ],
+      "type": "object"
+    },
+    "SemanticFrameHit": {
+      "description": "One ranked semantic retrieval hit.\n\nGenerated description text is Luna retrieval metadata only. This type never\ncarries Jev decision outcomes or probabilities.",
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "description_provenance": {
+          "$ref": "#/$defs/FrameDescriptionProvenance"
+        },
+        "frame": {
+          "$ref": "#/$defs/SavedFrameRef"
+        },
+        "generated_description": {
+          "description": "Luna-generated search metadata; not a lab predicate assessment.",
+          "type": "string"
+        },
+        "index": {
+          "$ref": "#/$defs/SemanticFrameIndexState"
+        },
+        "media_availability": {
+          "$ref": "#/$defs/SemanticFrameMediaAvailability"
+        },
+        "model_space": {
+          "$ref": "#/$defs/ModelSpaceIdentity"
+        },
+        "neighbors": {
+          "$ref": "#/$defs/SemanticFramePlaybackNeighbors"
+        },
+        "retrieval": {
+          "$ref": "#/$defs/SemanticRetrievalScore"
+        }
+      },
+      "required": [
+        "frame",
+        "captured_at",
+        "generated_description",
+        "description_provenance",
+        "model_space",
+        "retrieval",
+        "index",
+        "media_availability",
+        "neighbors"
+      ],
+      "type": "object"
+    },
+    "SemanticFrameIndexState": {
+      "description": "Persisted indexing state for one saved revision inside the scope.",
+      "oneOf": [
+        {
+          "const": "pending",
+          "description": "Manifest recorded; inference not finished.",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "Description and vector acknowledged for retrieval.",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "description": "Retryable or terminal inference failure.",
+          "type": "string"
+        },
+        {
+          "const": "expired",
+          "description": "Retention removed the revision from search.",
+          "type": "string"
+        }
+      ]
+    },
+    "SemanticFrameMediaAvailability": {
+      "description": "Whether saved media bytes remain playable for a hit.",
+      "oneOf": [
+        {
+          "const": "ready",
+          "description": "Authorized media is resolvable.",
+          "type": "string"
+        },
+        {
+          "const": "pending",
+          "description": "Indexing or media reconciliation still in progress.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Evidence cannot be served for this revision.",
+          "properties": {
+            "unavailable": {
+              "properties": {
+                "reason": {
+                  "description": "Stable reason such as `retention_expired` or `payload_missing`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "unavailable"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SemanticFramePlaybackNeighbors": {
+      "description": "Bounded neighbor frames for temporal playback around one hit.",
+      "properties": {
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/SavedFrameRef"
+          },
+          "type": "array"
+        },
+        "window": {
+          "$ref": "#/$defs/TimeRange"
+        }
+      },
+      "required": [
+        "window",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "SemanticRetrievalScore": {
+      "description": "ANN similarity returned to callers. Not a Jev decision probability.",
+      "properties": {
+        "metric": {
+          "$ref": "#/$defs/EmbeddingMetric"
+        },
+        "value": {
+          "format": "float",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "metric"
+      ],
+      "type": "object"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "TimeRange": {
+      "description": "A half-open UTC interval `[start, end)`.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "start": {
+          "$ref": "#/$defs/UtcTimestamp"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "VectorNormalization": {
+      "description": "Vector normalization applied before indexing.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Values are stored without normalization.",
+          "type": "string"
+        },
+        {
+          "const": "l2_unit",
+          "description": "L2 unit normalization.",
+          "type": "string"
+        }
+      ]
+    },
+    "VideoSourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/semantic-frame-search-result-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One page of semantic hits plus incomplete indexing signals.",
+  "properties": {
+    "candidate_budget_exhausted": {
+      "type": "boolean"
+    },
+    "hits": {
+      "$ref": "#/$defs/Page"
+    },
+    "incomplete_indexing": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "hits",
+    "incomplete_indexing",
+    "candidate_budget_exhausted"
+  ],
+  "title": "SemanticFrameSearchResult",
+  "type": "object"
+}

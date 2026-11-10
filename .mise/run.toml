@@ -31,7 +31,26 @@ run = "cargo nextest run --workspace"
 
 [schemas]
 description = "Regenerate versioned JSON Schemas"
-run = "cargo run --quiet --example generate-schemas"
+run = "cargo run --quiet --example generate-schemas --features semantic-contracts"
+
+[quality-semantic]
+description = "Run quality including semantic contract checks (requires dev-kit pin with semantic APIs)"
+depends = ["fmt-check", "check-semantic", "clippy-semantic", "test-semantic"]
+
+[check-semantic]
+description = "Type-check workspace with semantic contract feature"
+env = { CARGO_TARGET_DIR = "{{config_root}}/../target/quality", RUSTFLAGS = "-D warnings" }
+run = "cargo check --workspace --all-targets --features semantic-contracts"
+
+[clippy-semantic]
+description = "Lint workspace with semantic contract feature"
+env = { CARGO_TARGET_DIR = "{{config_root}}/../target/quality" }
+run = "cargo clippy --workspace --all-targets --features semantic-contracts -- -D warnings"
+
+[test-semantic]
+description = "Run tests including semantic contracts"
+env = { CARGO_TARGET_DIR = "{{config_root}}/../target/quality" }
+run = "cargo nextest run --workspace --features semantic-contracts"
 
 [compatibility]
 description = "Validate standalone TCK against pinned dev-kit integration endpoints"

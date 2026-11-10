@@ -395,6 +395,15 @@ fn fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabError> {
         | A2aLabCommand::GetVideoClip(_)
         | A2aLabCommand::GetVideoTimeline(_)
         | A2aLabCommand::FollowVideo(_)) => video_fixture_result(command),
+        #[cfg(feature = "semantic-contracts")]
+        A2aLabCommand::GetFrameDecisionCapabilities(_)
+        | A2aLabCommand::AppendFrameDecision(_)
+        | A2aLabCommand::ReadFrameDecisionHistory(_)
+        | A2aLabCommand::GetSemanticSearchCapabilities(_)
+        | A2aLabCommand::SearchSemanticFrames(_)
+        | A2aLabCommand::GetSemanticIndexingCoverage(_) => Err(A2aLabError::unavailable(
+            "optional semantic and decision capabilities are not registered in profile 1.3.0 fixtures",
+        )),
     }
 }
 

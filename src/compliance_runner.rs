@@ -1202,6 +1202,7 @@ fn case_required(case: &ComplianceCase, fixtures: &ComplianceFixtures) -> bool {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 enum PreparedCommand {
     Execute(A2aLabCommand),
     Rejected { code: &'static str },
@@ -1559,6 +1560,43 @@ fn check_url(field: &str, value: &str) -> Result<(), ComplianceRunError> {
 
 struct A2aEndpoint(A2aClient);
 
+#[cfg(feature = "semantic-contracts")]
+async fn dispatch_optional_semantic_client(
+    client: &A2aClient,
+    command: A2aLabCommand,
+) -> Result<A2aLabResult, A2aLabError> {
+    match command {
+        A2aLabCommand::GetFrameDecisionCapabilities(request) => client
+            .get_frame_decision_capabilities(request)
+            .await
+            .map(A2aLabResult::GetFrameDecisionCapabilities),
+        A2aLabCommand::AppendFrameDecision(request) => client
+            .append_frame_decision(request)
+            .await
+            .map(A2aLabResult::AppendFrameDecision),
+        A2aLabCommand::ReadFrameDecisionHistory(request) => client
+            .read_frame_decision_history(request)
+            .await
+            .map(A2aLabResult::ReadFrameDecisionHistory),
+        A2aLabCommand::GetSemanticSearchCapabilities(request) => client
+            .get_semantic_search_capabilities(request)
+            .await
+            .map(A2aLabResult::GetSemanticSearchCapabilities),
+        A2aLabCommand::SearchSemanticFrames(request) => client
+            .search_semantic_frames(request)
+            .await
+            .map(A2aLabResult::SearchSemanticFrames),
+        A2aLabCommand::GetSemanticIndexingCoverage(request) => client
+            .get_semantic_indexing_coverage(request)
+            .await
+            .map(A2aLabResult::GetSemanticIndexingCoverage),
+        _ => Err(A2aLabError::invalid(
+            "command",
+            "expected optional semantic or decision command",
+        )),
+    }
+}
+
 impl ComplianceEndpoint for A2aEndpoint {
     fn execute(
         &self,
@@ -1649,6 +1687,15 @@ impl ComplianceEndpoint for A2aEndpoint {
                     .follow_video(request)
                     .await
                     .map(A2aLabResult::FollowVideo),
+                #[cfg(feature = "semantic-contracts")]
+                command @ (A2aLabCommand::GetFrameDecisionCapabilities(_)
+                | A2aLabCommand::AppendFrameDecision(_)
+                | A2aLabCommand::ReadFrameDecisionHistory(_)
+                | A2aLabCommand::GetSemanticSearchCapabilities(_)
+                | A2aLabCommand::SearchSemanticFrames(_)
+                | A2aLabCommand::GetSemanticIndexingCoverage(_)) => {
+                    dispatch_optional_semantic_client(&self.0, command).await
+                }
             }
         })
     }

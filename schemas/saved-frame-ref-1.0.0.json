@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "CaptureGroupId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DvrStoreNamespace": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DvrTrackId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "SavedFrameId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Sha256Digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "VideoSourceId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/saved-frame-ref-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Reference to one committed saved media revision.\n\nThe [`SavedFrameRef::frame_id`] binds store identity, source, track epoch,\noriginal capture instant, and payload bytes. Payload replacement at the same\nDVR key produces a different revision and cannot inherit prior decisions.",
+  "properties": {
+    "capture_group": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CaptureGroupId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "captured_at": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "frame_id": {
+      "$ref": "#/$defs/SavedFrameId"
+    },
+    "payload_digest": {
+      "$ref": "#/$defs/Sha256Digest"
+    },
+    "source_id": {
+      "$ref": "#/$defs/VideoSourceId"
+    },
+    "store": {
+      "$ref": "#/$defs/DvrStoreNamespace"
+    },
+    "track_id": {
+      "$ref": "#/$defs/DvrTrackId"
+    }
+  },
+  "required": [
+    "frame_id",
+    "store",
+    "source_id",
+    "track_id",
+    "captured_at",
+    "payload_digest"
+  ],
+  "title": "SavedFrameRef",
+  "type": "object"
+}
