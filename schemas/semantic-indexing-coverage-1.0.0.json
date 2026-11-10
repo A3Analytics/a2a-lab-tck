@@ -129,18 +129,24 @@
       "type": "object"
     },
     "SemanticSearchScope": {
-      "description": "Finite retained source and half-open UTC scope for one search.",
+      "description": "Finite retained source scope with an optional half-open UTC candidate filter.",
       "properties": {
         "range": {
-          "$ref": "#/$defs/TimeRange"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "source_id": {
           "$ref": "#/$defs/VideoSourceId"
         }
       },
       "required": [
-        "source_id",
-        "range"
+        "source_id"
       ],
       "type": "object"
     },

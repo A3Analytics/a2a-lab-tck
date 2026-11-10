@@ -36,3 +36,6 @@ cognitive_complexity = "warn"
 type_complexity = "warn"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+
+[patch."https://github.com/A3Analytics/a2a-lab-dev-kit-rs"]
+a2a-lab-dev-kit = { path = "../a2a-lab-dev-kit-rs" }

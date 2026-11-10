@@ -375,11 +375,13 @@ fn semantic_hit_schema_excludes_decision_fields() {
 fn coverage_reports_incomplete_indexing_without_implying_absence() {
     let scope = SemanticSearchScope::new(
         VideoSourceId::new("deck-left").unwrap(),
-        TimeRange::new(
-            UtcTimestamp::parse("2024-06-01T12:00:00Z").unwrap(),
-            UtcTimestamp::parse("2024-06-01T13:00:00Z").unwrap(),
-        )
-        .unwrap(),
+        Some(
+            TimeRange::new(
+                UtcTimestamp::parse("2024-06-01T12:00:00Z").unwrap(),
+                UtcTimestamp::parse("2024-06-01T13:00:00Z").unwrap(),
+            )
+            .unwrap(),
+        ),
     )
     .unwrap();
     let coverage = SemanticIndexingCoverage::new(
