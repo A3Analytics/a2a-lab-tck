@@ -16,8 +16,9 @@ use a2a_lab_dev_kit::{
     JevProducerIdentity, JevStructuredOutput, LabPredicate, ModelSpaceIdentity,
     ProvenanceGeneration, SavedFrameRef, SemanticFrameHit, SemanticFrameIndexState,
     SemanticIndexingCoverage, SemanticIndexingFreshness, SemanticIndexingStateCounts,
-    SemanticRetrievalScore, SemanticSearchSchemaRefs, SemanticSearchScope, Sha256Digest,
-    TextEmbeddingProvenance, TimeRange, UtcTimestamp, VectorNormalization, VideoSourceId,
+    SemanticRetrievalScore, SemanticSearchCapabilities, SemanticSearchSchemaRefs,
+    SemanticSearchScope, Sha256Digest, TextEmbeddingProvenance, TimeRange, UtcTimestamp,
+    VectorNormalization, VideoSourceId,
 };
 use schemars::{JsonSchema, schema_for};
 use serde::de::DeserializeOwned;
@@ -29,6 +30,7 @@ pub const SEMANTIC_SCHEMA_FILES: &[&str] = &[
     "search-semantic-frames-request-1.0.0.json",
     "semantic-frame-search-result-1.0.0.json",
     "semantic-indexing-coverage-1.0.0.json",
+    "semantic-search-capabilities-1.0.0.json",
     "frame-decision-record-1.0.0.json",
     "append-frame-decision-request-1.0.0.json",
     "append-frame-decision-result-1.0.0.json",
@@ -150,6 +152,7 @@ fn checked_in_semantic_schemas_match_generated_types() {
         "semantic-frame-search-result-1.0.0.json",
     );
     assert_schema_matches::<SemanticIndexingCoverage>("semantic-indexing-coverage-1.0.0.json");
+    assert_schema_matches::<SemanticSearchCapabilities>("semantic-search-capabilities-1.0.0.json");
     assert_schema_matches::<FrameDecisionRecord>("frame-decision-record-1.0.0.json");
     assert_schema_matches::<AppendFrameDecisionRequest>("append-frame-decision-request-1.0.0.json");
     assert_schema_matches::<a2a_lab_dev_kit::AppendFrameDecisionResult>(
@@ -283,6 +286,7 @@ fn missing_descriptions_surface_explicit_index_state() {
         SemanticFrameIndexState::Pending,
         a2a_lab_dev_kit::SemanticFrameMediaAvailability::Pending,
         neighbors,
+        None,
     )
     .unwrap();
     assert_eq!(hit.index(), SemanticFrameIndexState::Pending);
@@ -302,7 +306,7 @@ fn uncertain_outcome_differs_from_unevaluated_coverage() {
     );
     let uncertain = FrameDecisionRecord::new(
         DecisionIdempotencyKey::new(
-            "jev-req-chupacabra-uncertain:lab.foreign_object_present:deck-slot-3",
+            "jev-req-chupacabra-unevaluated:lab.foreign_object_present:deck-slot-3",
         )
         .unwrap(),
         saved.clone(),
@@ -331,12 +335,10 @@ fn uncertain_outcome_differs_from_unevaluated_coverage() {
         DecisionEvaluationCoverage::Evaluated
     );
 
-    let unevaluated = jev_provenance(
-        "2024-06-01T12:00:11Z",
-        "2024-06-01T12:00:11Z",
-        DecisionEvaluationCoverage::NotEvaluated,
+    assert_ne!(
+        uncertain.provenance().coverage(),
+        DecisionEvaluationCoverage::NotEvaluated
     );
-    assert_ne!(uncertain.provenance().coverage(), unevaluated.coverage());
 }
 
 #[test]
@@ -350,6 +352,20 @@ fn attachment_provenance_binds_chupacabra_revision() {
         DEFAULT_BEDROCK_DESCRIPTION_MODEL
     );
     assert_eq!(saved.store().as_str(), "chupacabra.dvr");
+}
+
+#[test]
+fn semantic_hit_schema_carries_nested_assessments() {
+    fn property_names<T: JsonSchema + DeserializeOwned>() -> Vec<String> {
+        let value = serde_json::to_value(schema_for!(T)).unwrap();
+        value
+            .pointer("/properties")
+            .and_then(|properties| properties.as_object())
+            .map(|properties| properties.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+    let names = property_names::<SemanticFrameHit>();
+    assert!(names.iter().any(|name| name == "authorized_assessments"));
 }
 
 #[test]

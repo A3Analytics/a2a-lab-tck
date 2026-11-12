@@ -1,0 +1,174 @@
+{
+  "$defs": {
+    "EmbeddingMetric": {
+      "description": "Similarity metric for a vector index space.",
+      "oneOf": [
+        {
+          "const": "cosine",
+          "description": "Cosine similarity.",
+          "type": "string"
+        },
+        {
+          "const": "dot",
+          "description": "Inner product on normalized vectors.",
+          "type": "string"
+        },
+        {
+          "const": "euclidean",
+          "description": "Euclidean distance.",
+          "type": "string"
+        }
+      ]
+    },
+    "ModelSpaceIdentity": {
+      "description": "Identity of one compatible text-embedding index namespace.",
+      "properties": {
+        "dimensions": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "$ref": "#/$defs/ProvenanceGeneration"
+        },
+        "metric": {
+          "$ref": "#/$defs/EmbeddingMetric"
+        },
+        "model": {
+          "type": "string"
+        },
+        "normalization": {
+          "$ref": "#/$defs/VectorNormalization"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "dimensions",
+        "normalization",
+        "metric",
+        "generation"
+      ],
+      "type": "object"
+    },
+    "ProvenanceGeneration": {
+      "description": "Non-zero provenance generation for description or embedding pipelines.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SemanticProvenanceSelector": {
+      "description": "Declares the embedding index namespace and description generation for search.",
+      "properties": {
+        "description_generation": {
+          "$ref": "#/$defs/ProvenanceGeneration"
+        },
+        "model_space": {
+          "$ref": "#/$defs/ModelSpaceIdentity"
+        }
+      },
+      "required": [
+        "model_space",
+        "description_generation"
+      ],
+      "type": "object"
+    },
+    "SemanticSearchOperation": {
+      "description": "Search and coverage operations exposed when a semantic provider is registered.",
+      "oneOf": [
+        {
+          "const": "search_semantic_frames",
+          "description": "Scoped text or reference-frame retrieval.",
+          "type": "string"
+        },
+        {
+          "const": "get_semantic_indexing_coverage",
+          "description": "Per-state indexing counts for one scope and generation.",
+          "type": "string"
+        }
+      ]
+    },
+    "SemanticSearchSchemaRefs": {
+      "description": "JSON Schema type names advertised during capability discovery.",
+      "properties": {
+        "coverage_request": {
+          "type": "string"
+        },
+        "coverage_result": {
+          "type": "string"
+        },
+        "search_request": {
+          "type": "string"
+        },
+        "search_result": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "search_request",
+        "search_result",
+        "coverage_request",
+        "coverage_result"
+      ],
+      "type": "object"
+    },
+    "VectorNormalization": {
+      "description": "Vector normalization applied before indexing.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Values are stored without normalization.",
+          "type": "string"
+        },
+        {
+          "const": "l2_unit",
+          "description": "L2 unit normalization.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://a2a-lab.dev/schemas/semantic-search-capabilities-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Capability discovery for semantic search transport APIs.",
+  "properties": {
+    "active_provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SemanticProvenanceSelector"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/SemanticSearchOperation"
+      },
+      "type": "array"
+    },
+    "registered": {
+      "type": "boolean"
+    },
+    "schemas": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SemanticSearchSchemaRefs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "registered",
+    "operations"
+  ],
+  "title": "SemanticSearchCapabilities",
+  "type": "object"
+}

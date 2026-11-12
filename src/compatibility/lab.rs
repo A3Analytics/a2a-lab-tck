@@ -395,7 +395,6 @@ fn fixture_result(command: A2aLabCommand) -> Result<A2aLabResult, A2aLabError> {
         | A2aLabCommand::GetVideoClip(_)
         | A2aLabCommand::GetVideoTimeline(_)
         | A2aLabCommand::FollowVideo(_)) => video_fixture_result(command),
-        #[cfg(feature = "semantic-contracts")]
         A2aLabCommand::GetFrameDecisionCapabilities(_)
         | A2aLabCommand::AppendFrameDecision(_)
         | A2aLabCommand::ReadFrameDecisionHistory(_)

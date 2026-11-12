@@ -501,6 +501,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "max_assessment_rows_per_hit": {
+          "default": 20,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "max_neighbor_frames": {
           "format": "uint32",
           "minimum": 0,

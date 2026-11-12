@@ -9,7 +9,7 @@ use a2a_lab_dev_kit::{
     AppendFrameDecisionRequest, AppendFrameDecisionResult, FrameDecisionHistoryResult,
     FrameDecisionRecord, FrameDescriptionProvenance, ReadFrameDecisionHistoryRequest,
     SavedFrameRef, SearchSemanticFramesRequest, SemanticFrameSearchResult,
-    SemanticIndexingCoverage, TextEmbeddingProvenance,
+    SemanticIndexingCoverage, SemanticSearchCapabilities, TextEmbeddingProvenance,
 };
 #[cfg(feature = "semantic-contracts")]
 use schemars::JsonSchema;
@@ -46,6 +46,7 @@ fn write_semantic_schemas() -> Result<(), Box<dyn std::error::Error>> {
     write_typed_schema::<SearchSemanticFramesRequest>("search-semantic-frames-request-1.0.0.json")?;
     write_typed_schema::<SemanticFrameSearchResult>("semantic-frame-search-result-1.0.0.json")?;
     write_typed_schema::<SemanticIndexingCoverage>("semantic-indexing-coverage-1.0.0.json")?;
+    write_typed_schema::<SemanticSearchCapabilities>("semantic-search-capabilities-1.0.0.json")?;
     write_typed_schema::<FrameDecisionRecord>("frame-decision-record-1.0.0.json")?;
     write_typed_schema::<AppendFrameDecisionRequest>("append-frame-decision-request-1.0.0.json")?;
     write_typed_schema::<AppendFrameDecisionResult>("append-frame-decision-result-1.0.0.json")?;

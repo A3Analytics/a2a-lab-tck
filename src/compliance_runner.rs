@@ -1598,6 +1598,7 @@ async fn dispatch_optional_semantic_client(
 }
 
 impl ComplianceEndpoint for A2aEndpoint {
+    #[allow(clippy::too_many_lines)]
     fn execute(
         &self,
         command: A2aLabCommand,
@@ -1687,14 +1688,23 @@ impl ComplianceEndpoint for A2aEndpoint {
                     .follow_video(request)
                     .await
                     .map(A2aLabResult::FollowVideo),
-                #[cfg(feature = "semantic-contracts")]
                 command @ (A2aLabCommand::GetFrameDecisionCapabilities(_)
                 | A2aLabCommand::AppendFrameDecision(_)
                 | A2aLabCommand::ReadFrameDecisionHistory(_)
                 | A2aLabCommand::GetSemanticSearchCapabilities(_)
                 | A2aLabCommand::SearchSemanticFrames(_)
                 | A2aLabCommand::GetSemanticIndexingCoverage(_)) => {
-                    dispatch_optional_semantic_client(&self.0, command).await
+                    #[cfg(feature = "semantic-contracts")]
+                    {
+                        dispatch_optional_semantic_client(&self.0, command).await
+                    }
+                    #[cfg(not(feature = "semantic-contracts"))]
+                    {
+                        let _ = command;
+                        Err(A2aLabError::unavailable(
+                            "optional semantic and decision capabilities are disabled",
+                        ))
+                    }
                 }
             }
         })
