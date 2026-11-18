@@ -11,7 +11,7 @@ use super::lab::FixtureVariant;
 use super::report::{contract_report, interface_differences, unexplained_interface_differences};
 use super::server::{FixtureMode, FixtureServer};
 
-pub const DEVKIT_REVISION: &str = "64ea97d3edcac8f51ba802dbed7fc4a595aec763";
+pub const DEVKIT_REVISION: &str = "f129b20ddea10b44547908a5c39520f87350ba15";
 pub const PROFILE_VERSION: &str = COMPLIANCE_PROFILE_VERSION;
 
 #[derive(Debug, Clone, Copy)]

@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use a2a_lab_tck::compliance_profile;
 
 const HISTORICAL_EXTRACTION: &str = "9d5327868d96b3e800fd89f6debf434bcc12709d";
-const DEVKIT_REVISION: &str = "64ea97d3edcac8f51ba802dbed7fc4a595aec763";
+const DEVKIT_REVISION: &str = "f129b20ddea10b44547908a5c39520f87350ba15";
 const PROFILE_VERSION: &str = "1.3.0";
 const PROFILE_1_1_0_CASE_IDS: &[&str] = &[
     "logs.list.success",

@@ -15,7 +15,7 @@ publish = false
 semantic-contracts = []
 
 [dependencies]
-a2a-lab-dev-kit = { git = "https://github.com/A3Analytics/a2a-lab-dev-kit-rs", rev = "64ea97d3edcac8f51ba802dbed7fc4a595aec763", default-features = false }
+a2a-lab-dev-kit = { git = "https://github.com/A3Analytics/a2a-lab-dev-kit-rs", rev = "f129b20ddea10b44547908a5c39520f87350ba15", default-features = false }
 schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -36,6 +36,3 @@ cognitive_complexity = "warn"
 type_complexity = "warn"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-
-[patch."https://github.com/A3Analytics/a2a-lab-dev-kit-rs"]
-a2a-lab-dev-kit = { path = "../a2a-lab-dev-kit-rs" }

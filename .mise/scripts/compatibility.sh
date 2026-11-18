@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-devkit_revision="64ea97d3edcac8f51ba802dbed7fc4a595aec763"
+devkit_revision="f129b20ddea10b44547908a5c39520f87350ba15"
 historical_extraction="9d5327868d96b3e800fd89f6debf434bcc12709d"
 profile_version="1.3.0"
 evidence="$root/target/compatibility"
